@@ -1,0 +1,301 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Invoice Parser UI</title>
+  <link rel="stylesheet" href="/static/css/styles.css?v=4">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">Invoice Parser</div>
+      <nav class="nav">
+        <button class="nav-button active" data-tab="process">Process</button>
+        <button class="nav-button" data-tab="files">Files</button>
+        <button class="nav-button" data-tab="config">Config</button>
+        <button class="nav-button" data-tab="logs">Logs</button>
+      </nav>
+    </aside>
+
+    <main class="main">
+      <section id="files" class="tab">
+        <h1>Files</h1>
+        <div class="info-box info-box-compact" id="files-info">
+          <strong>Source folder:</strong> <span id="files-source">-</span><br>
+          <strong>Input folder:</strong> <span id="files-input-folder">-</span><br>
+          <strong>Output folder:</strong> <span id="files-output-folder">-</span><br>
+          <strong>Config path:</strong> <span id="files-config-path">-</span>
+        </div>
+        <div class="toolbar">
+          <button id="files-refresh" class="btn">Refresh</button>
+        </div>
+        <div class="files-section" data-section="incoming">
+          <h2>
+            Incoming
+            <button class="btn btn-icon section-toggle" aria-label="Toggle incoming files" aria-expanded="true">
+              <span class="chevron">&#9662;</span>
+            </button>
+          </h2>
+          <div class="table-wrapper">
+            <table id="incoming-files-table" class="data-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Status</th>
+                  <th>Size</th>
+                  <th>Modified</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="files-section" data-section="outgoing">
+          <h2>
+            Outgoing
+            <button class="btn btn-icon section-toggle" aria-label="Toggle outgoing files" aria-expanded="true">
+              <span class="chevron">&#9662;</span>
+            </button>
+          </h2>
+          <div class="table-wrapper">
+            <table id="outgoing-files-table" class="data-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Size</th>
+                  <th>Modified</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="process" class="tab">
+        <div class="process-header">
+          <h1>Process</h1>
+        </div>
+
+        <div id="workflow-output" class="alert hidden"></div>
+
+        <div id="workflow-status" class="workflow-status"></div>
+
+        <div class="progress-bar" id="workflow-progress" aria-label="Workflow progress">
+          <div class="progress-bar-fill" id="workflow-progress-fill" style="width: 0%;"></div>
+        </div>
+
+        <div class="workflow-layout">
+          <div class="workflow-panel">
+            <div class="workflow-panel-header">
+              <h2>Workflow</h2>
+              <div class="workflow-panel-actions">
+                <button id="workflow-start-over" class="btn btn-secondary hidden">Start Over</button>
+                <button id="workflow-process" class="btn btn-primary btn-workflow">Process Invoices</button>
+              </div>
+            </div>
+            <ol class="workflow-steps">
+              <li class="workflow-step" data-step="pull">
+                <div class="workflow-step-header">
+                  <span class="workflow-step-status" aria-hidden="true"></span>
+                  <span class="workflow-step-number">1</span>
+                  <span class="workflow-step-title">Pull from Google Drive</span>
+                  <span class="field-help" data-tooltip="Download raw invoice PDFs from the shared Drive input folder.">?</span>
+                </div>
+                <div class="workflow-step-body">
+                  <p class="workflow-step-desc">Fetch new invoices into the local incoming folder.</p>
+                </div>
+              </li>
+              <li class="workflow-step" data-step="preview">
+                <div class="workflow-step-header">
+                  <span class="workflow-step-status" aria-hidden="true"></span>
+                  <span class="workflow-step-number">2</span>
+                  <span class="workflow-step-title">Preview fields</span>
+                  <span class="field-help" data-tooltip="Read each PDF and show the account, number, date, total and planned filename.">?</span>
+                </div>
+                <div class="workflow-step-body">
+                  <p class="workflow-step-desc">Extract invoice details before renaming.</p>
+                </div>
+              </li>
+              <li class="workflow-step" data-step="review">
+                <div class="workflow-step-header">
+                  <span class="workflow-step-status" aria-hidden="true"></span>
+                  <span class="workflow-step-number">3</span>
+                  <span class="workflow-step-title">Review and edit</span>
+                  <span class="field-help" data-tooltip="Fix any missing fields directly in the table. Files with missing required fields will be marked for manual review.">?</span>
+                </div>
+                <div class="workflow-step-body">
+                  <p class="workflow-step-desc" id="review-step-desc">Check extracted values and edit cells if needed.</p>
+                  <div id="process-summary" class="summary summary-compact"></div>
+                </div>
+              </li>
+              <li class="workflow-step" data-step="rename">
+                <div class="workflow-step-header">
+                  <span class="workflow-step-status" aria-hidden="true"></span>
+                  <span class="workflow-step-number">4</span>
+                  <span class="workflow-step-title">Rename files</span>
+                  <span class="field-help" data-tooltip="Rename and archive PDFs locally using the previewed filenames.">?</span>
+                </div>
+                <div class="workflow-step-body">
+                  <p class="workflow-step-desc">Apply the planned filenames and move files to the outgoing folder.</p>
+                </div>
+              </li>
+              <li class="workflow-step" data-step="report">
+                <div class="workflow-step-header">
+                  <span class="workflow-step-status" aria-hidden="true"></span>
+                  <span class="workflow-step-number">5</span>
+                  <span class="workflow-step-title">Write info to Report</span>
+                  <span class="field-help" data-tooltip="Append processed invoice details to the configured Google Sheets report.">?</span>
+                </div>
+                <div class="workflow-step-body">
+                  <p class="workflow-step-desc">Record Client Ref., Invoice Date, PDF Invoice No. and Topped amount in the report.</p>
+                </div>
+              </li>
+              <li class="workflow-step" data-step="push">
+                <div class="workflow-step-header">
+                  <span class="workflow-step-status" aria-hidden="true"></span>
+                  <span class="workflow-step-number">6</span>
+                  <span class="workflow-step-title">Push to Google Drive</span>
+                  <span class="field-help" data-tooltip="Upload renamed invoices from the outgoing folder to the Drive destination folder.">?</span>
+                </div>
+                <div class="workflow-step-body">
+                  <p class="workflow-step-desc">Send processed files to Google Drive.</p>
+                </div>
+              </li>
+              <li class="workflow-step" data-step="clear">
+                <div class="workflow-step-header">
+                  <span class="workflow-step-status" aria-hidden="true"></span>
+                  <span class="workflow-step-number">7</span>
+                  <span class="workflow-step-title">Clear Drive input folder</span>
+                  <span class="field-help" data-tooltip="Delete the original raw files from the shared Drive input folder after a successful run.">?</span>
+                </div>
+                <div class="workflow-step-body">
+                  <p class="workflow-step-desc">Remove processed originals from Drive.</p>
+                </div>
+              </li>
+            </ol>
+          </div>
+
+          <div class="workflow-preview">
+            <div class="table-toolbar">
+              <button id="workflow-save-edits" class="btn" disabled>Save Edits</button>
+              <button id="workflow-download" class="btn" disabled>Download CSV</button>
+            </div>
+            <div class="table-wrapper process-table-wrapper">
+              <table id="process-table" class="data-table">
+                <thead>
+                  <tr>
+                    <th>Original</th>
+                    <th>Account</th>
+                    <th>Number</th>
+                    <th>Date</th>
+                    <th>Total</th>
+                    <th>Currency</th>
+                    <th>Target name</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+
+            <div class="advanced-panel">
+              <button id="workflow-advanced-toggle" class="advanced-panel-toggle">
+                <span class="advanced-panel-chevron">▸</span> Advanced
+              </button>
+              <div id="workflow-advanced-body" class="advanced-panel-body collapsed">
+                <p class="advanced-panel-hint">Run individual steps manually. Use with care: this can leave files in a half-processed state.</p>
+                <div class="advanced-panel-actions">
+                  <button id="workflow-pull" class="btn btn-secondary">Pull</button>
+                  <button id="workflow-preview" class="btn btn-secondary">Preview</button>
+                  <button id="workflow-rename" class="btn btn-primary">Rename Files</button>
+                  <button id="workflow-write-report" class="btn">Write info to Report</button>
+                  <button id="workflow-push" class="btn btn-secondary">Push</button>
+                  <button id="workflow-push-archive" class="btn">Push Archive</button>
+                  <button id="workflow-clear-input" class="btn btn-danger" disabled>Clear Drive Input</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="config" class="tab">
+        <h1>Configuration</h1>
+        <div class="toolbar">
+          <button id="config-save" class="btn btn-primary">Save Config</button>
+          <button id="config-reload" class="btn btn-secondary">Reload</button>
+        </div>
+        <div id="config-error" class="alert alert-error hidden"></div>
+        <div id="config-success" class="alert alert-success hidden"></div>
+        <form id="config-form" class="config-form"></form>
+      </section>
+
+      <section id="logs" class="tab">
+        <h1>Logs</h1>
+        <div class="toolbar">
+          <button id="logs-refresh" class="btn">Refresh</button>
+          <label class="toggle">
+            <input type="checkbox" id="logs-auto" checked>
+            Auto-refresh (5s)
+          </label>
+        </div>
+        <div class="table-wrapper">
+          <table id="logs-table" class="data-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Level</th>
+                <th>Event</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="modal" class="modal hidden">
+    <div class="modal-content">
+      <h3 id="modal-title">Confirm</h3>
+      <p id="modal-message"></p>
+      <div class="modal-actions">
+        <button id="modal-cancel" class="btn btn-secondary">Cancel</button>
+        <button id="modal-confirm" class="btn btn-primary">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="start-over-modal" class="modal hidden">
+    <div class="modal-content">
+      <h3>Start Over</h3>
+      <p>
+        Starting over will reset the workflow. Files already renamed locally will stay in the outgoing folder.
+        Original files in Google Drive input will not be deleted unless you run Clear Drive Input.
+      </p>
+      <label class="toggle">
+        <input type="checkbox" id="start-over-clear-incoming">
+        Clear local incoming folder before starting over
+      </label>
+      <div class="modal-actions">
+        <button id="start-over-cancel" class="btn btn-secondary">Cancel</button>
+        <button id="start-over-confirm" class="btn btn-primary">Start Over</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/core/api.js?v=4"></script>
+  <script src="/static/js/core/utils.js?v=4"></script>
+  <script src="/static/js/features/shared/modal.js?v=4"></script>
+  <script src="/static/js/features/local/files.js?v=4"></script>
+  <script src="/static/js/features/local/workflow.js?v=4"></script>
+  <script src="/static/js/features/local/config.js?v=4"></script>
+  <script src="/static/js/features/local/logs.js?v=4"></script>
+  <script src="/static/js/core/app.js?v=4"></script>
+</body>
+</html>

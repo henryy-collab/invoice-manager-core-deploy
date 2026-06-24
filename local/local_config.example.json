@@ -1,0 +1,101 @@
+{
+  "source_folder": "data",
+  "input_folder": "data/incoming",
+  "output_folder": "data/outgoing",
+  "filename_template": "{account}_{number}_Invoice_{date}.pdf",
+  "date_format": "%Y%m%d",
+  "archive_folder": "data/archive",
+  "log_file": "data/logs/parse_and_rename.log",
+  "timezone": "Asia/Hong_Kong",
+
+  "features": {
+    "archive": true,
+    "skip_already_processed": true,
+    "manual_review_for_missing": ["account", "date"],
+    "number_fallback_to_filename": true,
+    "deduplicate_within_run": true,
+    "dry_run": false
+  },
+
+  "archive": {
+    "mode": "copy_original"
+  },
+
+  "rclone": {
+    "enabled": false,
+    "remote": "mydrive-shared",
+    "source_drive_folder": "Auto Email Management/Google Ads/InvoicesRAW",
+    "destination_drive_folder": "Auto Email Management/Google Ads/Invoices",
+    "archive_drive_folder": null
+  },
+
+  "reports": {
+    "enabled": true,
+    "filename_template": "parsed_fields_{timestamp}.csv"
+  },
+
+  "google_sheets": {
+    "enabled": false,
+    "spreadsheet_url": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit",
+    "service_account_file": null,
+    "tab_name_template": "%b %Y",
+    "date_format": "%d/%m/%Y",
+    "skip_existing_by": "number"
+  },
+
+  "parsers": {
+    "account": {
+      "patterns": [
+        {"regex": "^Account:\\s*(.+?)(?=\\s*\\[|\\s*$)", "group": 1, "flags": ["IGNORECASE", "MULTILINE"]},
+        {"regex": "Account\\s*ID[:\\s]+([\\d\\-]+)", "group": 1, "flags": ["IGNORECASE"]}
+      ],
+      "unknown_values": ["-", "—", "--", "N/A", "n/a"],
+      "fallback": "UNKNOWN"
+    },
+    "number": {
+      "patterns": [
+        {"regex": "Invoice\\s*number[:\\s]+([A-Z0-9\\-]+)", "group": 1, "flags": ["IGNORECASE"]}
+      ],
+      "require_digit": true,
+      "fallback_to_filename": true,
+      "filename_pattern": "^\\d+$"
+    },
+    "date": {
+      "parse_formats": ["%d %B %Y", "%d %b %Y", "%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y"],
+      "nearby_line_window": 2,
+      "details_block": {
+        "enabled": true,
+        "header": "Details",
+        "dot_separator_regex": "^\\.{5,}$",
+        "label_regex": "Invoice\\s*number|Invoice\\s*date|Payment\\s*terms|Billing\\s*ID|Account\\s*ID",
+        "max_label_length": 80
+      }
+    },
+    "currency": {
+      "primary_regex": "Total\\s*amount\\s*due\\s*in\\s*([A-Z]{3})",
+      "symbol_map": {"HK$": "HKD", "US$": "USD", "€": "EUR", "£": "GBP", "¥": "JPY"}
+    },
+    "total": {
+      "primary_regex": "Total\\s*amount\\s*due(?:\\s*in\\s*[A-Z]{3})?[:\\s]*([A-Z$€£¥]*)\\s*([\\d,]+\\.\\d{2})",
+      "fallback_regex": "(?:HK\\$|US\\$|\\$|€|£|¥)\\s*([\\d,]+\\.\\d{2})",
+      "pick_max": true
+    }
+  },
+
+  "filename": {
+    "placeholders": {
+      "account": {"sanitize": true, "fallback": "UNKNOWN"},
+      "number": {"sanitize": true, "fallback": "unknown"},
+      "date": {"fallback": "unknown-date"},
+      "total": {"fallback": "unknown"},
+      "currency": {"fallback": "unknown"}
+    },
+    "manual_review_prefix": "000_",
+    "already_processed_patterns": [
+      "_Invoice_\\d{8}\\.pdf$",
+      "_unparsed\\.pdf$",
+      "^000_"
+    ],
+    "collision_suffix": "_{counter}"
+  }
+}

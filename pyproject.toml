@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "invoice-manager-core"
+version = "0.1.0"
+description = "Self-contained invoice parser and web UI"
+requires-python = ">=3.11"
+dependencies = [
+    "pymupdf>=1.27.0",
+    "pydantic>=2.0",
+    "gspread>=6.0",
+    "google-auth>=2.0",
+    "fastapi>=0.110.0",
+    "uvicorn>=0.25.0",
+    "httpx>=0.25.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["local", "ui"]
+
+[tool.setuptools.package-dir]
+invoice_parser = "local/invoice_parser"
+invoice_ui = "ui/invoice_ui"
