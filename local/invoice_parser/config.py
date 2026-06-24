@@ -178,6 +178,8 @@ class GoogleSheetsConfig(BaseModel):
     tab_name_template: str = "%b %Y"
     date_format: str = "%d/%m/%Y"
     skip_existing_by: str = "number"
+    raw_sheet_suffix: str = " [Auto]"
+    protect_raw_sheets: bool = True
 
     @field_validator("spreadsheet_url")
     @classmethod
