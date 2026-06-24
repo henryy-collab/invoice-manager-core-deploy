@@ -5,7 +5,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from invoice_parser.config import AppConfig
+from invoice_parser.config import AppConfig, resolve_config_paths
 from invoice_parser.logging import log_error, setup_logging
 from invoice_parser.processor import process_pdfs
 
@@ -51,6 +51,7 @@ def main():
     try:
         raw = json.loads(config_path.read_text(encoding="utf-8"))
         config = AppConfig.model_validate(raw)
+        config = resolve_config_paths(config, config_path)
     except json.JSONDecodeError as exc:
         print(f"ERROR: Invalid JSON in {config_path}: {exc}", file=sys.stderr)
         sys.exit(1)
@@ -62,8 +63,6 @@ def main():
         config.features.dry_run = True
 
     log_path = Path(config.log_file)
-    if not log_path.is_absolute():
-        log_path = config_path.parent / log_path
 
     logger = setup_logging(log_path)
 

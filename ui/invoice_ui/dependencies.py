@@ -3,7 +3,7 @@ from typing import Optional
 
 from fastapi import Request
 
-from invoice_parser.config import AppConfig
+from invoice_parser.config import AppConfig, resolve_config_paths
 from invoice_parser.logging import setup_logging
 from invoice_ui.config import UIConfig
 
@@ -45,7 +45,8 @@ def get_app_config(request: Request) -> AppConfig:
     config_path = get_config_path(request)
     try:
         raw = json.loads(config_path.read_text(encoding="utf-8"))
-        return AppConfig.model_validate(raw)
+        config = AppConfig.model_validate(raw)
+        return resolve_config_paths(config, config_path)
     except json.JSONDecodeError as exc:
         raise ValueError(f"Invalid JSON in {config_path}: {exc}")
     except ValidationError as exc:
@@ -54,10 +55,7 @@ def get_app_config(request: Request) -> AppConfig:
 
 def get_logger(request: Request):
     config = get_app_config(request)
-    config_path = get_config_path(request)
     log_path = Path(config.log_file)
-    if not log_path.is_absolute():
-        log_path = config_path.parent / log_path
     return setup_logging(log_path)
 
 

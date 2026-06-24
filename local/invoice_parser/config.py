@@ -1,6 +1,21 @@
+from pathlib import Path
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 import re
+
+
+def resolve_config_paths(config: "AppConfig", config_path: Path) -> "AppConfig":
+    base = config_path.parent
+    data = config.model_dump(mode="json")
+    path_keys = ("source_folder", "input_folder", "output_folder", "archive_folder")
+    for key in path_keys:
+        value = data.get(key)
+        if value and not Path(value).is_absolute():
+            data[key] = str((base / value).resolve())
+    log_file = data.get("log_file")
+    if log_file and not Path(log_file).is_absolute():
+        data["log_file"] = str((base / log_file).resolve())
+    return AppConfig.model_validate(data)
 
 
 class RegexPattern(BaseModel):
