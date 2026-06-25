@@ -15,6 +15,12 @@ A record of merged features and notable changes for Invoice Manager Core.
 - Header row moved to row 2; invoice data starts at row 3.
 - The protection warning dialog still appears when users try to edit cells.
 
+## 2026-06-25 — Start Over can clear outgoing folder
+
+- The Start Over modal now offers a second checkbox: "Clear local outgoing folder before starting over".
+- When checked, all files in `local/data/outgoing/` (renamed PDFs and `.meta.json` sidecars) are deleted before the workflow resets.
+- The existing "Clear local incoming folder" checkbox behavior is unchanged.
+
 ## 2026-06-24 — Protected [Auto] Google Sheets tabs
 
 - Google Sheets report tabs now use an `[Auto]` suffix (e.g. `Apr 2026 [Auto]`).

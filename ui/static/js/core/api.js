@@ -74,6 +74,10 @@ const api = {
     return this.post("/api/files/clear-incoming");
   },
 
+  clearOutgoing() {
+    return this.post("/api/files/clear-outgoing");
+  },
+
   writeToReport() {
     return this.post("/api/sheets/write");
   },

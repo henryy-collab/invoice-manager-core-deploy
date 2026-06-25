@@ -309,15 +309,17 @@ const workflowModule = {
 
   async _startOver() {
     const modal = document.getElementById("start-over-modal");
-    const checkbox = document.getElementById("start-over-clear-incoming");
+    const incomingCheckbox = document.getElementById("start-over-clear-incoming");
+    const outgoingCheckbox = document.getElementById("start-over-clear-outgoing");
     const confirmBtn = document.getElementById("start-over-confirm");
     const cancelBtn = document.getElementById("start-over-cancel");
 
-    checkbox.checked = false;
+    incomingCheckbox.checked = false;
+    outgoingCheckbox.checked = false;
     modal.classList.remove("hidden");
 
     const result = await new Promise((resolve) => {
-      const onConfirm = () => resolve({ confirmed: true, clearIncoming: checkbox.checked });
+      const onConfirm = () => resolve({ confirmed: true, clearIncoming: incomingCheckbox.checked, clearOutgoing: outgoingCheckbox.checked });
       const onCancel = () => resolve({ confirmed: false });
       confirmBtn.onclick = onConfirm;
       cancelBtn.onclick = onCancel;
@@ -335,6 +337,19 @@ const workflowModule = {
         filesModule.load();
       } catch (err) {
         this._setOutput(`Could not clear incoming folder: ${err.message}`, true);
+        return;
+      }
+    }
+
+    if (result.clearOutgoing) {
+      this._setOutput("Clearing local outgoing folder...", false);
+      try {
+        const clearResult = await api.clearOutgoing();
+        if (!clearResult.success) throw new Error(clearResult.error || "Clear outgoing failed");
+        this._setOutput(clearResult.message, false);
+        filesModule.load();
+      } catch (err) {
+        this._setOutput(`Could not clear outgoing folder: ${err.message}`, true);
         return;
       }
     }

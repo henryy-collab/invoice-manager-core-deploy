@@ -22,3 +22,9 @@ def file_summary(request: Request):
 def clear_incoming(request: Request):
     service = FileService.from_request(request)
     return service.clear_incoming()
+
+
+@router.post("/clear-outgoing")
+def clear_outgoing(request: Request):
+    service = FileService.from_request(request)
+    return service.clear_outgoing()

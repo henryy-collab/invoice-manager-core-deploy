@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Invoice Parser UI</title>
-  <link rel="stylesheet" href="/static/css/styles.css?v=5">
+  <link rel="stylesheet" href="/static/css/styles.css?v=6">
 </head>
 <body>
   <div class="app">
@@ -275,12 +275,16 @@
     <div class="modal-content">
       <h3>Start Over</h3>
       <p>
-        Starting over will reset the workflow. Files already renamed locally will stay in the outgoing folder.
+        Starting over will reset the workflow.
         Original files in Google Drive input will not be deleted unless you run Clear Drive Input.
       </p>
       <label class="toggle">
         <input type="checkbox" id="start-over-clear-incoming">
         Clear local incoming folder before starting over
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="start-over-clear-outgoing">
+        Clear local outgoing folder before starting over
       </label>
       <div class="modal-actions">
         <button id="start-over-cancel" class="btn btn-secondary">Cancel</button>
@@ -289,13 +293,13 @@
     </div>
   </div>
 
-  <script src="/static/js/core/api.js?v=5"></script>
-  <script src="/static/js/core/utils.js?v=5"></script>
-  <script src="/static/js/features/shared/modal.js?v=5"></script>
-  <script src="/static/js/features/local/files.js?v=5"></script>
-  <script src="/static/js/features/local/workflow.js?v=5"></script>
-  <script src="/static/js/features/local/config.js?v=5"></script>
-  <script src="/static/js/features/local/logs.js?v=5"></script>
-  <script src="/static/js/core/app.js?v=5"></script>
+  <script src="/static/js/core/api.js?v=6"></script>
+  <script src="/static/js/core/utils.js?v=6"></script>
+  <script src="/static/js/features/shared/modal.js?v=6"></script>
+  <script src="/static/js/features/local/files.js?v=6"></script>
+  <script src="/static/js/features/local/workflow.js?v=6"></script>
+  <script src="/static/js/features/local/config.js?v=6"></script>
+  <script src="/static/js/features/local/logs.js?v=6"></script>
+  <script src="/static/js/core/app.js?v=6"></script>
 </body>
 </html>

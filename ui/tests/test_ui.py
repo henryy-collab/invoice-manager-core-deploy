@@ -334,4 +334,27 @@ def test_clear_incoming_when_folder_empty(ui_client, tmp_path):
     assert data["deleted"] == 0
 
 
+def test_clear_outgoing_deletes_local_files(ui_client, tmp_path):
+    pdf = tmp_path / "outgoing" / "test.pdf"
+    pdf.write_bytes(b"%PDF-1.4 dummy")
+    meta = tmp_path / "outgoing" / "test.pdf.meta.json"
+    meta.write_text("{}", encoding="utf-8")
+
+    res = ui_client.post("/api/files/clear-outgoing")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["success"] is True
+    assert data["deleted"] == 2
+    assert not pdf.exists()
+    assert not meta.exists()
+
+
+def test_clear_outgoing_when_folder_empty(ui_client, tmp_path):
+    res = ui_client.post("/api/files/clear-outgoing")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["success"] is True
+    assert data["deleted"] == 0
+
+
 

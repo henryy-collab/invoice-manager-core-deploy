@@ -81,3 +81,22 @@ class FileService:
         if failed:
             return {"success": False, "deleted": deleted, "error": f"Deleted {deleted} file(s), {failed} failed."}
         return {"success": True, "deleted": deleted, "message": f"Deleted {deleted} file(s) from incoming folder."}
+
+    def clear_outgoing(self) -> dict:
+        output_dir = self._output_dir()
+        if not output_dir.exists():
+            return {"success": True, "deleted": 0, "message": "Outgoing folder does not exist."}
+
+        deleted = 0
+        failed = 0
+        for file_path in output_dir.iterdir():
+            if file_path.is_file():
+                try:
+                    file_path.unlink()
+                    deleted += 1
+                except OSError:
+                    failed += 1
+
+        if failed:
+            return {"success": False, "deleted": deleted, "error": f"Deleted {deleted} file(s), {failed} failed."}
+        return {"success": True, "deleted": deleted, "message": f"Deleted {deleted} file(s) from outgoing folder."}
