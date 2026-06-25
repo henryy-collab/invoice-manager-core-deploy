@@ -2,6 +2,19 @@
 
 A record of merged features and notable changes for Invoice Manager Core.
 
+## 2026-06-25 — Currency column in Google Sheets report
+
+- Google Sheets report rows now include **Topped Currency** before **Topped amount**.
+- The protected `[Auto]` tab header row is updated automatically on the next write.
+- CSV report already includes Topped Currency; no change required.
+
+## 2026-06-25 — Warning-only protection for [Auto] sheets
+
+- `[Auto]` sheets are now protected with `warningOnly: True`, so users can copy and delete them after seeing a warning.
+- The first row of each `[Auto]` sheet contains a bold red caps warning: "COPY THIS SHEET FIRST, THEN DELETE [AUTO]. DO NOT EDIT DIRECTLY — IT BREAKS AUTOMATION."
+- Header row moved to row 2; invoice data starts at row 3.
+- The protection warning dialog still appears when users try to edit cells.
+
 ## 2026-06-24 — Protected [Auto] Google Sheets tabs
 
 - Google Sheets report tabs now use an `[Auto]` suffix (e.g. `Apr 2026 [Auto]`).

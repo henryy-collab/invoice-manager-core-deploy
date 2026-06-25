@@ -22,9 +22,12 @@ HEADER_COLUMNS = [
     "PM",
     "Informed AM & PM",
     "Top up date",
+    "Topped Currency",
     "Topped amount",
     "Balance",
 ]
+
+_SHEET_WARNING = "COPY THIS SHEET FIRST, THEN DELETE [AUTO]. DO NOT EDIT DIRECTLY — IT BREAKS AUTOMATION."
 
 _SHEET_URL_RE = re.compile(r"/d/([a-zA-Z0-9\-_]+)")
 
@@ -82,6 +85,7 @@ def _format_row(invoice: Invoice, config: GoogleSheetsConfig) -> list[Any]:
         "",
         "",
         "",
+        invoice.currency or "",
         amount_value if amount_value is not None else "",
         "",
     ]
@@ -102,7 +106,7 @@ def _group_invoices_by_sheet(
 def get_existing_invoice_numbers(values: list[list[Any]], number_column: int = 4) -> set[str]:
     existing: set[str] = set()
     for i, row in enumerate(values):
-        if i == 0:
+        if i in (0, 1):
             continue
         if len(row) > number_column and row[number_column]:
             existing.add(str(row[number_column]))
@@ -138,20 +142,19 @@ def _authenticate_client(service_account_file: str | None):
 
 
 def _protect_worksheet(spreadsheet, worksheet, service_account_email: str | None) -> None:
-    if not service_account_email:
-        return
     spreadsheet.batch_update({
         "requests": [{
             "addProtectedRange": {
                 "protectedRange": {
                     "range": {
                         "sheetId": worksheet.id,
+                        "startRowIndex": 1,
+                        "endRowIndex": 1000,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 26,
                     },
-                    "description": "Auto-generated invoice data",
-                    "warningOnly": False,
-                    "editors": {
-                        "users": [service_account_email],
-                    },
+                    "description": "COPY this sheet first, then delete [Auto]. Do NOT edit directly — it breaks automation.",
+                    "warningOnly": True,
                 },
             },
         }],
@@ -170,12 +173,21 @@ def _open_worksheet(client, spreadsheet_id: str, sheet_name: str, service_accoun
         return worksheet
 
 
+def _format_warning_row(worksheet):
+    worksheet.format("A1", {
+        "textFormat": {"bold": True, "foregroundColor": {"red": 1, "green": 0, "blue": 0}},
+        "backgroundColor": {"red": 1, "green": 1, "blue": 0},
+    })
+
+
 def _ensure_headers(worksheet) -> list[list[Any]]:
     values = worksheet.get_all_values()
-    if not values or values[0] != HEADER_COLUMNS:
+    if not values or values[0] != [_SHEET_WARNING] or values[1] != HEADER_COLUMNS:
         worksheet.clear()
+        worksheet.append_row([_SHEET_WARNING])
         worksheet.append_row(HEADER_COLUMNS)
-        values = [HEADER_COLUMNS]
+        _format_warning_row(worksheet)
+        values = [[_SHEET_WARNING], HEADER_COLUMNS]
     return values
 
 

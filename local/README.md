@@ -13,7 +13,6 @@ This Python script reads PDF invoices downloaded by the Google Apps Script downl
 - Copies the **original** PDF to an `archive/` subfolder before renaming (configurable).
 - Supports a `--dry-run` flag to preview changes without touching files.
 - Writes JSON logs to `parse_and_rename.log`.
-- Can append extracted invoice fields to a Google Sheets report tab (see project docs for setup).
 - Can append extracted invoice fields to a Google Sheets report (configured separately in `local_config.json`).
 
 ## Why PyMuPDF instead of Docling
@@ -166,12 +165,12 @@ python parse_and_rename.py "G:\...\Test Destination\5593369279.pdf" --dry-run
 
 ## Web UI
 
-A browser-based UI is available for team use. See [`invoice_ui_README.md`](invoice_ui_README.md) for details.
+A browser-based UI is available for team use. See the main project `README.md` for details.
 
-Start it with:
+Start it from the repo root with:
 
 ```powershell
-python web_ui.py
+python ui\web_ui.py
 ```
 
 Then open `http://<shared-pc-ip>:8000` in a browser.

@@ -40,7 +40,9 @@
     "service_account_file": null,
     "tab_name_template": "%b %Y",
     "date_format": "%d/%m/%Y",
-    "skip_existing_by": "number"
+    "skip_existing_by": "number",
+    "raw_sheet_suffix": " [Auto]",
+    "protect_raw_sheets": true
   },
 
   "parsers": {

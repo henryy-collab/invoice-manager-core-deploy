@@ -6,10 +6,12 @@ from invoice_parser.config import AppConfig, GoogleSheetsConfig
 from invoice_parser.models import Invoice
 from invoice_parser.reports.sheets import (
     HEADER_COLUMNS,
+    _SHEET_WARNING,
     _group_invoices_by_sheet,
     append_invoice_rows,
     build_sheet_name,
     extract_spreadsheet_id,
+    get_existing_invoice_numbers,
 )
 
 
@@ -82,6 +84,29 @@ def test_pdf_invoice_date_column_position():
     assert HEADER_COLUMNS[4] == "PDF Invoice No."
     assert HEADER_COLUMNS[5] == "PDF Invoice Date"
     assert HEADER_COLUMNS[7] == "Invoice Date"
+
+
+def test_topped_currency_column_position():
+    assert HEADER_COLUMNS[12] == "Top up date"
+    assert HEADER_COLUMNS[13] == "Topped Currency"
+    assert HEADER_COLUMNS[14] == "Topped amount"
+    assert HEADER_COLUMNS[15] == "Balance"
+
+
+def test_warning_row_constant():
+    assert _SHEET_WARNING.startswith("COPY THIS SHEET FIRST")
+    assert "DO NOT EDIT DIRECTLY" in _SHEET_WARNING
+
+
+def test_get_existing_invoice_numbers_skips_warning_and_header_rows():
+    values = [
+        [_SHEET_WARNING],
+        HEADER_COLUMNS,
+        ["A", "", "", "", "N1", "15/04/2026", "", "", "", "", "", "", "", "HKD", "100.00", ""],
+        ["B", "", "", "", "N2", "20/05/2026", "", "", "", "", "", "", "", "HKD", "200.00", ""],
+    ]
+    existing = get_existing_invoice_numbers(values)
+    assert existing == {"N1", "N2"}
 
 
 @pytest.fixture

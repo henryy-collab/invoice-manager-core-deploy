@@ -182,7 +182,9 @@ If you are using the Google Sheets report, add the `google_sheets` section and r
     "service_account_file": "/opt/invoice-manager/.secrets/service-account.json",
     "tab_name_template": "%b %Y",
     "date_format": "%d/%m/%Y",
-    "skip_existing_by": "number"
+    "skip_existing_by": "number",
+    "raw_sheet_suffix": " [Auto]",
+    "protect_raw_sheets": true
   }
 }
 ```
