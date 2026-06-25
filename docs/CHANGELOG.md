@@ -2,6 +2,12 @@
 
 A record of merged features and notable changes for Invoice Manager Core.
 
+## 2026-06-24 — Protected [Auto] Google Sheets tabs
+
+- Google Sheets report tabs now use an `[Auto]` suffix (e.g. `Apr 2026 [Auto]`).
+- New [Auto] tabs are protected so only the service account can edit them.
+- Users can duplicate an [Auto] tab to make their own editable copy; the app only writes to the protected [Auto] tab.
+
 ## 2026-06-24 — Split into invoice-manager-core
 
 - Created `invoice-manager-core` as a self-contained repo for the working parser and web UI.

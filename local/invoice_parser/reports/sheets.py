@@ -1,3 +1,4 @@
+import json
 import re
 from collections import defaultdict
 from datetime import datetime
@@ -38,7 +39,7 @@ def extract_spreadsheet_id(url: str | None) -> str:
 
 
 def build_sheet_name(config: GoogleSheetsConfig, dt: datetime) -> str:
-    return dt.strftime(config.tab_name_template)
+    return dt.strftime(config.tab_name_template) + config.raw_sheet_suffix
 
 
 def _parse_date(value: str | None, date_format: str) -> datetime | None:
@@ -108,6 +109,17 @@ def get_existing_invoice_numbers(values: list[list[Any]], number_column: int = 4
     return existing
 
 
+def _read_service_account_email(service_account_file: str) -> str | None:
+    path = Path(service_account_file)
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data.get("client_email")
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
 def _authenticate_client(service_account_file: str | None):
     import gspread
     from google.oauth2.service_account import Credentials
@@ -125,14 +137,37 @@ def _authenticate_client(service_account_file: str | None):
     return gspread.authorize(creds)
 
 
-def _open_worksheet(client, spreadsheet_id: str, sheet_name: str):
+def _protect_worksheet(spreadsheet, worksheet, service_account_email: str | None) -> None:
+    if not service_account_email:
+        return
+    spreadsheet.batch_update({
+        "requests": [{
+            "addProtectedRange": {
+                "protectedRange": {
+                    "range": {
+                        "sheetId": worksheet.id,
+                    },
+                    "description": "Auto-generated invoice data",
+                    "warningOnly": False,
+                    "editors": {
+                        "users": [service_account_email],
+                    },
+                },
+            },
+        }],
+    })
+
+
+def _open_worksheet(client, spreadsheet_id: str, sheet_name: str, service_account_email: str | None):
     import gspread
 
     spreadsheet = client.open_by_key(spreadsheet_id)
     try:
         return spreadsheet.worksheet(sheet_name)
     except gspread.WorksheetNotFound:
-        return spreadsheet.add_worksheet(title=sheet_name, rows=1000, cols=len(HEADER_COLUMNS))
+        worksheet = spreadsheet.add_worksheet(title=sheet_name, rows=1000, cols=len(HEADER_COLUMNS))
+        _protect_worksheet(spreadsheet, worksheet, service_account_email)
+        return worksheet
 
 
 def _ensure_headers(worksheet) -> list[list[Any]]:
@@ -180,12 +215,13 @@ def append_invoice_rows(
     try:
         spreadsheet_id = extract_spreadsheet_id(gs_config.spreadsheet_url)
         client = _authenticate_client(gs_config.service_account_file)
+        service_account_email = _read_service_account_email(gs_config.service_account_file) if gs_config.service_account_file else None
 
         grouped = _group_invoices_by_sheet(invoices, gs_config)
         sheet_counts: dict[str, int] = {}
 
         for sheet_name, sheet_invoices in grouped.items():
-            worksheet = _open_worksheet(client, spreadsheet_id, sheet_name)
+            worksheet = _open_worksheet(client, spreadsheet_id, sheet_name, service_account_email)
             written = _append_to_sheet(worksheet, sheet_invoices, gs_config)
             sheet_counts[sheet_name] = written
 

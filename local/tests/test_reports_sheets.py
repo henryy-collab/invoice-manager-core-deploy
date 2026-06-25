@@ -31,7 +31,16 @@ def test_extract_spreadsheet_id_none():
 def test_build_sheet_name():
     config = GoogleSheetsConfig(spreadsheet_url="https://docs.google.com/spreadsheets/d/x/edit")
     dt = datetime(2026, 4, 30)
-    assert build_sheet_name(config, dt) == "Apr 2026"
+    assert build_sheet_name(config, dt) == "Apr 2026 [Auto]"
+
+
+def test_build_sheet_name_custom_suffix():
+    config = GoogleSheetsConfig(
+        spreadsheet_url="https://docs.google.com/spreadsheets/d/x/edit",
+        raw_sheet_suffix=" [RAW]",
+    )
+    dt = datetime(2026, 4, 30)
+    assert build_sheet_name(config, dt) == "Apr 2026 [RAW]"
 
 
 def test_group_invoices_by_sheet():
@@ -45,9 +54,9 @@ def test_group_invoices_by_sheet():
         Invoice(account="C", number="N3", date="01/04/2026", total="300.00", currency="HKD"),
     ]
     grouped = _group_invoices_by_sheet(invoices, config)
-    assert set(grouped.keys()) == {"Apr 2026", "May 2026"}
-    assert len(grouped["Apr 2026"]) == 2
-    assert len(grouped["May 2026"]) == 1
+    assert set(grouped.keys()) == {"Apr 2026 [Auto]", "May 2026 [Auto]"}
+    assert len(grouped["Apr 2026 [Auto]"]) == 2
+    assert len(grouped["May 2026 [Auto]"]) == 1
 
 
 def test_append_invoice_rows_disabled(config_factory):
