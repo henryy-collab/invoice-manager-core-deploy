@@ -6,6 +6,24 @@
 - Default branch: `master`
 - Note: the original `invoice-manager` repo is deprecated. Continue all work here.
 
+## Keeping this file up to date
+
+`AGENTS.md` is the source of truth for the current repo state. When any of the following change, update this file in the same PR/commit:
+
+- **Workflow or tab names/buttons**: update the “Current runtime flow” steps and any related labels.
+- **Config fields, paths, or defaults**: update “Active config pointers” and any config examples.
+- **New known issues or cache behavior**: update “Known quirks”.
+- **Patterns for new features/config/frontend/backend**: update “Notes for future work”.
+- **Archived docs, scripts or service files**: update the “Legacy references warning” and “Quick reference” lists.
+- **Report columns or sheet behavior**: update the Write info to Report bullet in “Current runtime flow”.
+- **This safe-word section or the safe word itself**: keep it current.
+
+## Safe word
+
+The safe word for this project is `SAFEWORD`. The agent must include it at the end of every response. If a response does not end with `SAFEWORD`, the session may have lost this context and a fresh session should be started.
+
+---
+
 ## What this project is
 A self-contained system for processing Google invoice PDFs:
 - `local/` — Python PDF parser and renamer (CLI).
@@ -97,15 +115,19 @@ When implementing anything new, follow this approach:
 - Local parser README: `local/README.md`
 - Core changelog: `docs/CHANGELOG.md`
 - Service account setup: `docs/SERVICE_ACCOUNT_SETUP.md`
-- Archived reference docs: `project/docs/`
+- Archived reference docs: `project/docs/` (including `AGENTS.md`, `CHEATSHEET.md`, `LINUX_SHARED_SETUP.md`, `MACOS_SETUP.md`, `TECH_DEBT.md`)
 - Archived legacy README: `project/README-legacy.md`
+- Archived scripts: `project/scripts/`
+- Archived systemd unit: `project/systemd/`
 
 ## Legacy references warning
-This repo was split from the original `invoice-manager` repo, and some files under `project/` are archived as-is for reference. They may still contain outdated pointers such as:
+This repo was split from the original `invoice-manager` repo, and files under `project/` are archived as-is for reference. They may still contain outdated pointers such as:
 - The old repo path (`C:\Users\Henry Yau\Apps\invoice-manager`).
 - The old external data folder (`invoice-manager-data/`).
 - Linux/macOS setup instructions that assume a different directory layout.
 - References to files or folders that no longer exist in core (`v2/`, `scripts/` at root, `systemd/` at root, etc.).
+
+When `project/` contents change, update the reference lists in this file ("Quick reference" and "Legacy references warning") so the archive index stays accurate.
 
 Do not follow any path, command, or instruction from `project/` without first verifying it against the current core repo layout. If something looks legacy or contradictory, flag it and ask for clarification before acting on it.
 
@@ -143,4 +165,4 @@ See `docs/CHANGELOG.md` for a full history of merged features.
 - When adding new Process workflow actions, follow the existing pattern: backend method in `ui/invoice_ui/services/`, endpoint in `ui/invoice_ui/routers/`, API wrapper in `ui/static/js/core/api.js`, and UI handler in `ui/static/js/features/local/workflow.js`.
 - Google Sheets report writes follow the same workflow pattern and live in `ui/invoice_ui/services/sheets_service.py` and `ui/invoice_ui/routers/sheets_router.py`.
 - When changing the frontend, bump the cache-busting query string on the affected assets in `ui/static/index.html` (e.g. `?v=4`) so returning browsers load the new code.
-- **Update documentation**: when adding a new feature, update `docs/CHANGELOG.md`, `docs/SERVICE_ACCOUNT_SETUP.md`, `local/README.md`, and `README.md` as applicable. Only update archived docs under `project/docs/` if they are still relevant to the current core app.
+- **Update documentation**: when adding a new feature, update `docs/CHANGELOG.md`, `docs/SERVICE_ACCOUNT_SETUP.md`, `local/README.md`, and `README.md` as applicable. Only update archived docs under `project/` if they are still relevant to the current core app, and keep `project/docs/AGENTS.md` up to date when the archive changes.
