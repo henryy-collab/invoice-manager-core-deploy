@@ -1,16 +1,16 @@
 :root {
   --bg: #f4f6f8;
-  --sidebar-bg: #1f2937;
+  --sidebar-bg: #00225d;
   --sidebar-text: #f3f4f6;
-  --accent: #2563eb;
-  --accent-hover: #1d4ed8;
+  --accent: #ff5254;
+  --accent-hover: #f24a4c;
   --danger: #dc2626;
   --warning: #d97706;
   --success: #16a34a;
-  --text: #111827;
-  --muted: #6b7280;
-  --border: #d1d5db;
-  --card: #ffffff;
+  --text: #00225d;
+  --muted: #666666;
+  --border: #d8d8d8;
+  --card: #fafafa;
 }
 
 * {
@@ -19,7 +19,7 @@
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: proxima-nova, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   background: var(--bg);
   color: var(--text);
 }
@@ -42,6 +42,7 @@ body {
   font-size: 1.25rem;
   font-weight: 700;
   margin-bottom: 1.5rem;
+  color: #ffffff;
 }
 
 .nav {
@@ -56,14 +57,18 @@ body {
   color: inherit;
   text-align: left;
   padding: 0.6rem 0.75rem;
-  border-radius: 0.375rem;
+  border-radius: 4px;
   cursor: pointer;
   font-size: 0.95rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .nav-button:hover,
 .nav-button.active {
-  background: rgba(255, 255, 255, 0.1);
+  background: #ff5254;
+  color: #ffffff;
 }
 
 .main {
@@ -135,9 +140,9 @@ h1 {
 }
 
 .card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
+  background: #ffffff;
+  border: none;
+  border-radius: 4px;
   padding: 1rem;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
@@ -151,12 +156,13 @@ h1 {
 .card-value {
   font-size: 1.5rem;
   font-weight: 700;
+  color: var(--text);
 }
 
 .info-box {
-  background: var(--card);
+  background: #ffffff;
   border: 1px solid var(--border);
-  border-radius: 0.5rem;
+  border-radius: 4px;
   padding: 1rem;
   line-height: 1.6;
 }
@@ -171,19 +177,23 @@ h1 {
 .btn {
   background: #ffffff;
   border: 1px solid var(--border);
-  border-radius: 0.375rem;
+  border-radius: 4px;
   padding: 0.5rem 1rem;
   cursor: pointer;
   font-size: 0.95rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  box-shadow: 0 5px 10px 0 rgba(0, 0, 0, 0.1);
 }
 
 .btn:hover {
-  background: #f9fafb;
+  background: #f9f9f9;
 }
 
 .btn-primary {
   background: var(--accent);
-  color: white;
+  color: #ffffff;
   border-color: var(--accent);
 }
 
@@ -218,9 +228,9 @@ h1 {
   align-items: center;
   margin-bottom: 1rem;
   padding: 0.5rem 0.75rem;
-  background: var(--card);
+  background: #ffffff;
   border: 1px solid var(--border);
-  border-radius: 0.5rem;
+  border-radius: 4px;
   font-size: 0.85rem;
 }
 
@@ -244,14 +254,14 @@ h1 {
 .progress-bar {
   height: 0.5rem;
   background: #e5e7eb;
-  border-radius: 9999px;
+  border-radius: 4px;
   overflow: hidden;
   margin-bottom: 1rem;
 }
 
 .progress-bar-fill {
   height: 100%;
-  background: var(--accent);
+  background: linear-gradient(180deg, #ff5254 0%, #f24a4c 100%);
   transition: width 0.3s ease;
 }
 
@@ -264,16 +274,17 @@ h1 {
 }
 
 .workflow-panel {
-  background: var(--card);
+  background: #ffffff;
   border: 1px solid var(--border);
-  border-radius: 0.5rem;
+  border-radius: 4px;
   padding: 1rem;
 }
 
 .workflow-panel h2 {
   margin: 0;
   font-size: 1.1rem;
-  font-weight: 600;
+  font-weight: 700;
+  color: var(--text);
 }
 
 .workflow-panel-header {
@@ -296,7 +307,7 @@ h1 {
 .btn-workflow {
   padding: 0.625rem 1.25rem;
   font-size: 0.95rem;
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .workflow-steps {
@@ -347,17 +358,17 @@ h1 {
   background: #e5e7eb;
   color: #374151;
   font-size: 0.85rem;
-  font-weight: 600;
-  border: 2px solid var(--card);
+  font-weight: 700;
+  border: 2px solid #ffffff;
   z-index: 1;
 }
 
 .workflow-step-number {
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .workflow-step-title {
-  font-weight: 600;
+  font-weight: 700;
   font-size: 0.95rem;
 }
 
@@ -380,7 +391,7 @@ h1 {
 
 .workflow-step.active .workflow-step-status {
   background: var(--accent);
-  color: white;
+  color: #ffffff;
 }
 
 .workflow-step.active .workflow-step-title {
@@ -389,7 +400,7 @@ h1 {
 
 .workflow-step.done .workflow-step-status {
   background: var(--success);
-  color: white;
+  color: #ffffff;
   font-size: 0;
 }
 
@@ -400,7 +411,7 @@ h1 {
 
 .workflow-step.paused .workflow-step-status {
   background: var(--warning);
-  color: white;
+  color: #ffffff;
   font-size: 0;
 }
 
@@ -432,7 +443,7 @@ h1 {
 
 .workflow-step.running .workflow-step-status {
   background: var(--accent);
-  color: white;
+  color: #ffffff;
   font-size: 0;
 }
 
@@ -440,7 +451,7 @@ h1 {
   content: "";
   width: 0.75rem;
   height: 0.75rem;
-  border: 2px solid white;
+  border: 2px solid #ffffff;
   border-right-color: transparent;
   border-radius: 9999px;
   animation: spin 0.75s linear infinite;
@@ -482,9 +493,9 @@ h1 {
 }
 
 .advanced-panel {
-  background: var(--card);
+  background: #ffffff;
   border: 1px solid var(--border);
-  border-radius: 0.5rem;
+  border-radius: 4px;
 }
 
 .advanced-panel-toggle {
@@ -497,8 +508,10 @@ h1 {
   border: none;
   cursor: pointer;
   font-size: 0.95rem;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 .advanced-panel-chevron {
@@ -567,7 +580,7 @@ h1 {
   min-width: 6rem;
   padding: 0.25rem 0.4rem;
   border: 1px solid var(--border);
-  border-radius: 0.25rem;
+  border-radius: 4px;
   font-size: 0.9rem;
   background: #ffffff;
 }
@@ -575,12 +588,12 @@ h1 {
 .inline-edit:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+  box-shadow: 0 0 0 2px rgba(255, 82, 84, 0.15);
 }
 
 tr.pending-edit .inline-edit {
-  background: #fffbeb;
-  border-color: #f59e0b;
+  background: #fff5cb;
+  border-color: #eea020;
 }
 
 .toggle {
@@ -592,9 +605,9 @@ tr.pending-edit .inline-edit {
 }
 
 .table-wrapper {
-  background: var(--card);
+  background: #ffffff;
   border: 1px solid var(--border);
-  border-radius: 0.5rem;
+  border-radius: 4px;
   overflow-x: auto;
 }
 
@@ -612,8 +625,9 @@ tr.pending-edit .inline-edit {
 }
 
 .data-table th {
-  background: #f9fafb;
-  font-weight: 600;
+  background: #f9f9f9;
+  font-weight: 700;
+  color: var(--text);
 }
 
 .data-table tr:last-child td {
@@ -625,7 +639,7 @@ tr.pending-edit .inline-edit {
   padding: 0.2rem 0.5rem;
   border-radius: 9999px;
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
 }
 
@@ -657,17 +671,17 @@ tr.pending-edit .inline-edit {
 }
 
 .summary-item {
-  background: var(--card);
+  background: #ffffff;
   border: 1px solid var(--border);
-  border-radius: 0.375rem;
+  border-radius: 4px;
   padding: 0.5rem 0.75rem;
   font-size: 0.9rem;
 }
 
 .config-form {
-  background: var(--card);
+  background: #ffffff;
   border: 1px solid var(--border);
-  border-radius: 0.5rem;
+  border-radius: 4px;
   padding: 1rem;
 }
 
@@ -681,6 +695,7 @@ tr.pending-edit .inline-edit {
   font-size: 1rem;
   border-bottom: 1px solid var(--border);
   padding-bottom: 0.4rem;
+  font-weight: 700;
 }
 
 .form-row {
@@ -698,7 +713,7 @@ tr.pending-edit .inline-edit {
 
 .form-group label {
   font-size: 0.85rem;
-  font-weight: 500;
+  font-weight: 600;
   display: flex;
   align-items: center;
   gap: 0.35rem;
@@ -727,11 +742,11 @@ tr.pending-edit .inline-edit {
   transform: translateX(-50%);
   width: 16rem;
   padding: 0.5rem 0.75rem;
-  background: #1f2937;
+  background: #00225d;
   color: #f3f4f6;
   font-size: 0.8rem;
   font-weight: 400;
-  border-radius: 0.375rem;
+  border-radius: 4px;
   line-height: 1.4;
   z-index: 10;
   white-space: normal;
@@ -744,7 +759,7 @@ tr.pending-edit .inline-edit {
   left: 50%;
   transform: translateX(-50%);
   border: 0.3rem solid transparent;
-  border-top-color: #1f2937;
+  border-top-color: #00225d;
   z-index: 10;
 }
 
@@ -754,7 +769,7 @@ tr.pending-edit .inline-edit {
 .form-group select {
   padding: 0.45rem 0.6rem;
   border: 1px solid var(--border);
-  border-radius: 0.375rem;
+  border-radius: 4px;
   font-family: inherit;
   font-size: 0.95rem;
 }
@@ -771,7 +786,7 @@ tr.pending-edit .inline-edit {
 
 .alert {
   padding: 0.75rem 1rem;
-  border-radius: 0.375rem;
+  border-radius: 4px;
   margin-bottom: 1rem;
   font-size: 0.9rem;
 }
@@ -795,7 +810,7 @@ tr.pending-edit .inline-edit {
 .modal {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 34, 93, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -803,8 +818,8 @@ tr.pending-edit .inline-edit {
 }
 
 .modal-content {
-  background: var(--card);
-  border-radius: 0.5rem;
+  background: #ffffff;
+  border-radius: 4px;
   padding: 1.5rem;
   width: 90%;
   max-width: 420px;
@@ -847,4 +862,12 @@ tr.pending-edit .inline-edit {
   text-align: center;
   padding: 2rem;
   color: var(--muted);
+}
+
+a {
+  color: #427fe0;
+}
+
+a:hover {
+  color: #ff5254;
 }

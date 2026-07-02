@@ -1,0 +1,17 @@
+; Example systemd unit for a Linux shared-PC setup.
+; Adjust WorkingDirectory, User, ExecStart paths and config path for your deployment.
+[Unit]
+Description=Invoice Manager Web UI
+After=network.target
+
+[Service]
+Type=simple
+User=invoice
+WorkingDirectory=/opt/invoice-manager-core
+ExecStart=/opt/invoice-manager-core/.venv/bin/python ui/web_ui.py
+Restart=on-failure
+Environment=INVOICE_UI_PORT=8000
+Environment=INVOICE_UI_CONFIG_PATH=/opt/invoice-manager-core/local/local_config.json
+
+[Install]
+WantedBy=multi-user.target
