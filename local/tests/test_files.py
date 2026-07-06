@@ -19,8 +19,9 @@ def test_is_already_processed_matches_patterns():
 
 def test_missing_required_fields_account_and_date(sample_config):
     invoice = Invoice()
+    type_config = sample_config.document_types[sample_config.default_document_type]
     missing = missing_required_fields(
-        invoice, ["account", "date"], sample_config.parsers.account
+        invoice, ["account", "date"], type_config.fields
     )
     assert "account" in missing
     assert "date" in missing
@@ -28,8 +29,9 @@ def test_missing_required_fields_account_and_date(sample_config):
 
 def test_missing_required_fields_account_present(sample_config):
     invoice = Invoice(account="ACME", date="20240415")
+    type_config = sample_config.document_types[sample_config.default_document_type]
     missing = missing_required_fields(
-        invoice, ["account", "date"], sample_config.parsers.account
+        invoice, ["account", "date"], type_config.fields
     )
     assert missing == []
 

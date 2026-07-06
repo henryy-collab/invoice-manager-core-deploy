@@ -21,7 +21,7 @@ def export_csv(request: Request):
     if not config.reports.enabled:
         return {"success": False, "error": "Reports are disabled in config."}
 
-    content = generate_csv_content(results)
+    content = generate_csv_content(results, config)
     filename = build_filename(config, timestamp=datetime.now())
 
     return StreamingResponse(

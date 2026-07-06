@@ -13,6 +13,7 @@ const workflowModule = {
     pendingEdits: new Map(),
     syncStatus: null,
     lastResult: null,
+    reportOverwrite: false,
   },
 
   async load() {
@@ -192,7 +193,8 @@ const workflowModule = {
 
   async _runReport(isPipeline) {
     await this._runStep("report", isPipeline, async () => {
-      const result = await api.writeToReport();
+      const overwrite = !isPipeline && this._state.reportOverwrite;
+      const result = await api.writeToReport(overwrite);
       if (!result.success && !result.skipped) {
         return result;
       }
@@ -678,6 +680,10 @@ const workflowModule = {
     await this._runReport(false);
   },
 
+  setReportOverwrite(value) {
+    this._state.reportOverwrite = Boolean(value);
+  },
+
   async push() {
     await this._runPush(false);
   },
@@ -708,6 +714,14 @@ document.addEventListener("DOMContentLoaded", () => {
   _bindButton("workflow-save-edits", () => workflowModule.saveEdits());
   _bindButton("workflow-rename", () => workflowModule.renameFiles());
   _bindButton("workflow-write-report", () => workflowModule.writeToReport());
+
+  const overwriteCheckbox = document.getElementById("workflow-report-overwrite");
+  if (overwriteCheckbox) {
+    overwriteCheckbox.addEventListener("change", (e) => {
+      workflowModule.setReportOverwrite(e.target.checked);
+    });
+  }
+
   _bindButton("workflow-push", () => workflowModule.push());
   _bindButton("workflow-push-archive", () => workflowModule.pushArchive());
   _bindButton("workflow-clear-input", () => workflowModule.clearInput());

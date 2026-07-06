@@ -1,7 +1,9 @@
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
-from invoice_parser.config import AppConfig
+from invoice_parser.config import AppConfig, make_config_paths_relative, resolve_config_paths
 
 
 def test_config_loads_with_defaults(minimal_config_dict):
@@ -68,3 +70,41 @@ def test_config_invalid_regex_includes_error_detail(minimal_config_dict):
 def test_config_rejects_missing_source_folder():
     with pytest.raises(ValidationError):
         AppConfig.model_validate({})
+
+
+def test_resolve_config_paths_resolves_service_account_file(tmp_path):
+    (tmp_path / ".git").mkdir()
+    config_path = tmp_path / "local" / "local_config.json"
+    config_path.parent.mkdir()
+    data = {
+        "source_folder": "local/data",
+        "google_sheets": {
+            "enabled": True,
+            "spreadsheet_url": "https://docs.google.com/spreadsheets/d/x/edit",
+            "service_account_file": "keys/account.json",
+        },
+    }
+    config = AppConfig.model_validate(data)
+    resolved = resolve_config_paths(config, config_path)
+    expected = str((tmp_path / "keys" / "account.json").resolve())
+    assert resolved.google_sheets.service_account_file == expected
+
+
+def test_make_config_paths_relative_round_trip(tmp_path):
+    (tmp_path / ".git").mkdir()
+    config_path = tmp_path / "local" / "local_config.json"
+    config_path.parent.mkdir()
+    data = {
+        "source_folder": str(tmp_path / "local" / "data"),
+        "log_file": str(tmp_path / "local" / "data" / "logs" / "app.log"),
+        "google_sheets": {
+            "enabled": True,
+            "spreadsheet_url": "https://docs.google.com/spreadsheets/d/x/edit",
+            "service_account_file": str(tmp_path / "keys" / "account.json"),
+        },
+    }
+    config = AppConfig.model_validate(data)
+    relative = make_config_paths_relative(config, config_path)
+    assert relative.source_folder == "local/data"
+    assert relative.log_file == "local/data/logs/app.log"
+    assert relative.google_sheets.service_account_file == "keys/account.json"

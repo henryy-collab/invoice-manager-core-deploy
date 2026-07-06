@@ -5,8 +5,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from invoice_parser.config import AppConfig, GoogleSheetsConfig
-from invoice_parser.models import Invoice
+from invoice_parser.config import AppConfig, DocumentTypeConfig, GoogleSheetsConfig
+from invoice_parser.models import Document, Invoice
 
 HEADER_COLUMNS = [
     "Client Ref.",
@@ -67,49 +67,59 @@ def _parse_amount(value: str | None) -> float | None:
         return None
 
 
-def _format_row(invoice: Invoice, config: GoogleSheetsConfig) -> list[Any]:
-    date_value = _parse_date(invoice.date, config.date_format)
-    amount_value = _parse_amount(invoice.total)
+def _format_row(document: Document, type_config: DocumentTypeConfig, config: GoogleSheetsConfig) -> list[Any]:
+    column_to_field = {column: field for field, column in type_config.report_columns.items()}
 
-    return [
-        invoice.account or "",
-        "",
-        "",
-        "",
-        invoice.number or "",
-        date_value.strftime("%Y-%m-%d") if date_value is not None else "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        invoice.currency or "",
-        amount_value if amount_value is not None else "",
-        "",
-    ]
+    row: list[Any] = []
+    for column in HEADER_COLUMNS:
+        field = column_to_field.get(column)
+        if field is None:
+            row.append("")
+            continue
+
+        value = document.get(field)
+
+        if column == "PDF Invoice Date":
+            date_value = _parse_date(value, config.date_format)
+            row.append(date_value.strftime("%Y-%m-%d") if date_value is not None else "")
+        elif column == "Topped amount":
+            amount_value = _parse_amount(value)
+            row.append(amount_value if amount_value is not None else "")
+        else:
+            row.append(value or "")
+
+    return row
 
 
-def _group_invoices_by_sheet(
-    invoices: list[Invoice],
+def _group_documents_by_sheet(
+    documents: list[Document],
     config: GoogleSheetsConfig,
-) -> dict[str, list[Invoice]]:
-    grouped: dict[str, list[Invoice]] = defaultdict(list)
-    for invoice in invoices:
-        dt = _parse_date(invoice.date, config.date_format)
+) -> dict[str, list[Document]]:
+    grouped: dict[str, list[Document]] = defaultdict(list)
+    for document in documents:
+        dt = _parse_date(document.get("date"), config.date_format)
         sheet_name = build_sheet_name(config, dt) if dt else build_sheet_name(config, datetime.now())
-        grouped[sheet_name].append(invoice)
+        grouped[sheet_name].append(document)
     return grouped
 
 
-def get_existing_invoice_numbers(values: list[list[Any]], number_column: int = 4) -> set[str]:
-    existing: set[str] = set()
+def _find_header_column_index(values: list[list[Any]], column_name: str) -> int | None:
+    if len(values) < 2:
+        return None
+    header_row = values[1]
+    for i, cell in enumerate(header_row):
+        if cell == column_name:
+            return i
+    return None
+
+
+def _map_existing_rows(values: list[list[Any]], column_index: int) -> dict[str, int]:
+    existing: dict[str, int] = {}
     for i, row in enumerate(values):
         if i in (0, 1):
             continue
-        if len(row) > number_column and row[number_column]:
-            existing.add(str(row[number_column]))
+        if len(row) > column_index and row[column_index]:
+            existing[str(row[column_index])] = i + 1
     return existing
 
 
@@ -166,62 +176,148 @@ def _open_worksheet(client, spreadsheet_id: str, sheet_name: str, service_accoun
 
     spreadsheet = client.open_by_key(spreadsheet_id)
     try:
-        return spreadsheet.worksheet(sheet_name)
+        return spreadsheet, spreadsheet.worksheet(sheet_name)
     except gspread.WorksheetNotFound:
         worksheet = spreadsheet.add_worksheet(title=sheet_name, rows=1000, cols=len(HEADER_COLUMNS))
+        worksheet.append_row([_SHEET_WARNING])
+        worksheet.append_row(HEADER_COLUMNS)
+        _format_warning(spreadsheet, worksheet)
         _protect_worksheet(spreadsheet, worksheet, service_account_email)
-        return worksheet
+        return spreadsheet, worksheet
 
 
-def _format_warning_row(worksheet):
-    worksheet.format("A1", {
-        "textFormat": {"bold": True, "foregroundColor": {"red": 1, "green": 0, "blue": 0}},
-        "backgroundColor": {"red": 1, "green": 1, "blue": 0},
+def _format_warning(spreadsheet, worksheet):
+    end_column = len(HEADER_COLUMNS) - 1
+    spreadsheet.batch_update({
+        "requests": [
+            {
+                "mergeCells": {
+                    "range": {
+                        "sheetId": worksheet.id,
+                        "startRowIndex": 0,
+                        "endRowIndex": 1,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": len(HEADER_COLUMNS),
+                    },
+                    "mergeType": "MERGE_ALL",
+                },
+            },
+        ],
     })
+    worksheet.format("A1", {
+        "textFormat": {
+            "bold": True,
+            "foregroundColor": {"red": 1, "green": 0, "blue": 0},
+            "fontSize": 14,
+        },
+        "backgroundColor": {"red": 1, "green": 1, "blue": 0},
+        "horizontalAlignment": "CENTER",
+        "verticalAlignment": "MIDDLE",
+    })
+    if end_column > 0:
+        worksheet.format(
+            f"A1:{chr(65 + end_column)}1",
+            {"backgroundColor": {"red": 1, "green": 1, "blue": 0}},
+        )
 
 
-def _ensure_headers(worksheet) -> list[list[Any]]:
+def _ensure_headers(worksheet, spreadsheet) -> list[list[Any]]:
     values = worksheet.get_all_values()
-    if not values or values[0] != [_SHEET_WARNING] or values[1] != HEADER_COLUMNS:
+
+    has_warning = bool(values) and values[0] == [_SHEET_WARNING]
+    has_header = bool(values) and len(values) > 1 and values[1] == HEADER_COLUMNS
+
+    if has_warning and has_header:
+        return values
+
+    if not values or all(not any(str(cell).strip() for cell in row) for row in values):
         worksheet.clear()
         worksheet.append_row([_SHEET_WARNING])
         worksheet.append_row(HEADER_COLUMNS)
-        _format_warning_row(worksheet)
-        values = [[_SHEET_WARNING], HEADER_COLUMNS]
+        _format_warning(spreadsheet, worksheet)
+        return [[_SHEET_WARNING], HEADER_COLUMNS]
+
     return values
 
 
-def _append_to_sheet(
+def _resolve_key_column_index(
+    values: list[list[Any]],
+    type_config: DocumentTypeConfig,
+) -> int | None:
+    target_column = type_config.report_columns.get("number")
+    if target_column is None:
+        return None
+    return _find_header_column_index(values, target_column)
+
+
+def _upsert_to_sheet(
+    spreadsheet,
     worksheet,
-    invoices: list[Invoice],
-    config: GoogleSheetsConfig,
-) -> int:
-    values = _ensure_headers(worksheet)
-    existing_numbers = get_existing_invoice_numbers(values)
+    documents: list[Document],
+    config: AppConfig,
+    overwrite: bool = False,
+) -> dict[str, int]:
+    gs_config = config.google_sheets
+    default_type_config = config.document_types[config.default_document_type]
 
-    rows: list[list[Any]] = []
-    for invoice in invoices:
-        number = invoice.number or ""
-        if number in existing_numbers:
-            continue
-        existing_numbers.add(number)
-        rows.append(_format_row(invoice, config))
+    if overwrite:
+        worksheet.clear()
+        values: list[list[Any]] = []
+    else:
+        values = _ensure_headers(worksheet, spreadsheet)
 
-    if rows:
-        worksheet.append_rows(rows, value_input_option="USER_ENTERED")
+    if not values:
+        worksheet.append_row([_SHEET_WARNING])
+        worksheet.append_row(HEADER_COLUMNS)
+        _format_warning(spreadsheet, worksheet)
+        values = [[_SHEET_WARNING], HEADER_COLUMNS]
 
-    return len(rows)
+    key_column_index: int | None = None
+    existing_rows: dict[str, int] = {}
+
+    updates: list[tuple[int, list[Any]]] = []
+    new_rows: list[list[Any]] = []
+
+    for document in documents:
+        type_config = config.document_types.get(document.document_type, default_type_config)
+        if key_column_index is None:
+            key_column_index = _resolve_key_column_index(values, type_config)
+            if key_column_index is not None and not overwrite:
+                existing_rows = _map_existing_rows(values, key_column_index)
+
+        row = _format_row(document, type_config, gs_config)
+        key_value = document.get("number") or "" if key_column_index is None else ""
+        if key_column_index is not None and len(row) > key_column_index:
+            key_value = str(row[key_column_index])
+
+        if key_value and key_value in existing_rows and not overwrite:
+            row_number = existing_rows[key_value]
+            updates.append((row_number, row))
+        else:
+            new_rows.append(row)
+            if key_value:
+                existing_rows[key_value] = len(values) + len(new_rows)
+
+    for row_number, row in updates:
+        worksheet.update(f"A{row_number}", [row], value_input_option="USER_ENTERED")
+
+    if new_rows:
+        worksheet.append_rows(new_rows, value_input_option="USER_ENTERED")
+
+    return {"written": len(new_rows), "updated": len(updates)}
+
 
 
 def append_invoice_rows(
-    invoices: list[Invoice],
+    documents: list[Document],
     config: AppConfig,
+    overwrite: bool = False,
 ) -> dict[str, Any]:
     gs_config = config.google_sheets
     if not gs_config.enabled:
         return {"success": True, "skipped": True, "message": "Google Sheets reporting is disabled."}
 
-    if not invoices:
+    if not documents:
         return {"success": True, "skipped": True, "message": "No processed invoices to report."}
 
     try:
@@ -229,21 +325,26 @@ def append_invoice_rows(
         client = _authenticate_client(gs_config.service_account_file)
         service_account_email = _read_service_account_email(gs_config.service_account_file) if gs_config.service_account_file else None
 
-        grouped = _group_invoices_by_sheet(invoices, gs_config)
-        sheet_counts: dict[str, int] = {}
+        grouped = _group_documents_by_sheet(documents, gs_config)
+        sheet_counts: dict[str, dict[str, int]] = {}
 
-        for sheet_name, sheet_invoices in grouped.items():
-            worksheet = _open_worksheet(client, spreadsheet_id, sheet_name, service_account_email)
-            written = _append_to_sheet(worksheet, sheet_invoices, gs_config)
-            sheet_counts[sheet_name] = written
+        for sheet_name, sheet_documents in grouped.items():
+            spreadsheet, worksheet = _open_worksheet(client, spreadsheet_id, sheet_name, service_account_email)
+            sheet_counts[sheet_name] = _upsert_to_sheet(spreadsheet, worksheet, sheet_documents, config, overwrite=overwrite)
 
-        total_written = sum(sheet_counts.values())
+        total_written = sum(counts["written"] for counts in sheet_counts.values())
+        total_updated = sum(counts["updated"] for counts in sheet_counts.values())
+
+        message_parts = [f"Wrote {total_written} row(s) across {len(sheet_counts)} sheet(s)."]
+        if total_updated:
+            message_parts.append(f"Updated {total_updated} existing row(s).")
 
         return {
             "success": True,
             "written": total_written,
+            "updated": total_updated,
             "sheets": sheet_counts,
-            "message": f"Wrote {total_written} row(s) across {len(sheet_counts)} sheet(s).",
+            "message": " ".join(message_parts),
         }
     except FileNotFoundError as exc:
         return {

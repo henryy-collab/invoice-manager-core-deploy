@@ -17,6 +17,19 @@
 - **Archived docs, scripts or service files**: update the “Legacy references warning” and “Quick reference” lists.
 - **Report columns or sheet behavior**: update the Write info to Report bullet in “Current runtime flow”.
 - **This safe-word section or the safe word itself**: keep it current.
+- **Documentation files outside `project/`**: when `README.md`, `local/README.md`, `docs/CHANGELOG.md`, or `docs/SERVICE_ACCOUNT_SETUP.md` are updated, reflect the key points here so this file remains the single source of truth for agents.
+
+## Always keep documentation up to date
+
+Whenever code changes affect behavior, configuration, or the user-facing workflow, update the relevant documentation in the same branch:
+
+1. **`docs/CHANGELOG.md`** — add a dated entry describing the change.
+2. **`local/README.md`** — update config examples, feature descriptions, and usage instructions.
+3. **`README.md`** — update high-level setup, data layout, and notes.
+4. **`docs/SERVICE_ACCOUNT_SETUP.md`** — update if Google Drive/Sheets configuration, paths, or authentication behavior changes.
+5. **`project/docs/AGENTS.md`** — keep this starter current with the latest architecture, config pointers, and conventions.
+
+Treat documentation as part of the feature, not an afterthought. If a change would confuse someone reading the docs before the code, the docs need updating.
 
 ## Safe word
 
@@ -57,8 +70,9 @@ python ui\web_ui.py
 Then open http://127.0.0.1:8000.
 
 ## Architecture notes
-- The parser is intentionally modular: extractor, parsers, filename, files, processor, config.
+- The parser is intentionally modular: extractor, classifier, parsers, filename, files, processor, config.
 - The UI mirrors this: services, routers, models.
+- Config is driven by a `document_types` registry; each type has its own classifier, field parsers, filename template, placeholders, manual-review fields, and report column mappings. Global settings (folders, features, filename prefix/patterns, rclone, reports, google_sheets) remain at the top level.
 - Frontend JS is split into:
   - `ui/static/js/core/` — shared utilities and router (`api.js`, `utils.js`, `app.js`).
   - `ui/static/js/features/local/` — parser-specific UI (`files.js`, `workflow.js`, `config.js`, `logs.js`).
@@ -68,7 +82,9 @@ Then open http://127.0.0.1:8000.
 ## Configuration
 - Copy `local/local_config.example.json` to `local/local_config.json`.
 - `local/local_config.json` is machine-specific and excluded from Git.
+- Relative paths in config are resolved from the **project root** (the directory containing `.git`). For example, `local/data` resolves to `<repo-root>/local/data`, and `keys/service-account.json` resolves to `<repo-root>/keys/service-account.json`.
 - Runtime data lives in `local/data/` (incoming, outgoing, archive, logs, reports, state). It is created automatically on startup and excluded from Git.
+- The active document type is determined by classifier patterns on the extracted text; `default_document_type` is used when no type matches.
 
 ## User's working style
 When implementing anything new, follow this approach:
@@ -89,16 +105,20 @@ When implementing anything new, follow this approach:
    - Add or update tests for new behavior.
    - Run existing tests after every meaningful change.
    - Both parser and UI have test suites — run both.
-5. Good error handling and logging
+5. Update documentation
+   - Update `docs/CHANGELOG.md`, `README.md`, `local/README.md`, and `docs/SERVICE_ACCOUNT_SETUP.md` when behavior, config, or workflow changes.
+   - Keep `project/docs/AGENTS.md` current with architecture and config pointers.
+   - Documentation changes are part of the feature, not an afterthought.
+6. Good error handling and logging
    - Validate inputs early and return clear errors.
    - Use the existing logger for backend events.
    - Surface user-friendly messages in the UI.
    - Never silently swallow exceptions.
-6. Match existing conventions
+7. Match existing conventions
    - No comments unless asked.
    - Follow existing naming, formatting, and file organization.
    - Reuse existing utilities before writing new ones.
-7. Do not surprise
+8. Do not surprise
    - No commits unless explicitly asked.
    - No large refactors without discussion.
    - Keep changes minimal and focused on the task.
@@ -108,6 +128,7 @@ When implementing anything new, follow this approach:
 - Keep modules small and single-purpose.
 - Match existing code style.
 - Run tests after changes.
+- Update documentation when behavior changes.
 - Do not commit unless explicitly asked.
 
 ## Quick reference
@@ -115,6 +136,7 @@ When implementing anything new, follow this approach:
 - Local parser README: `local/README.md`
 - Core changelog: `docs/CHANGELOG.md`
 - Service account setup: `docs/SERVICE_ACCOUNT_SETUP.md`
+- Document types roadmap and architecture: `project/extendingfunctionality/`
 - Archived reference docs: `project/docs/` (including `AGENTS.md`, `CHEATSHEET.md`, `LINUX_SHARED_SETUP.md`, `MACOS_SETUP.md`, `TECH_DEBT.md`)
 - Archived legacy README: `project/README-legacy.md`
 - Archived scripts: `project/scripts/`
@@ -140,8 +162,8 @@ See `docs/CHANGELOG.md` for a full history of merged features.
 1. rclone pulls raw PDFs to `local/data/incoming/` via `mydrive-service`.
 2. In the **Process** tab, click **Process Invoices** to run the full workflow: Pull → Preview → Rename → Write info to Report → Push → Clear.
 3. The flow pauses if files need manual review or a required config step is missing. Edit the table, fix the config, then click **Resume Processing**.
-4. Parser renames files and writes `.meta.json` sidecars to `local/data/outgoing/`.
-5. Write info to Report appends processed invoice details (Client Ref., PDF Invoice Date, PDF Invoice No., Topped Currency, Topped amount) to the configured Google Sheets spreadsheet, in an `[Auto]` tab named for the invoice month/year with an `[Auto]` suffix (e.g. `Apr 2026 [Auto]`). The first row of the tab shows a bold red caps warning: "COPY THIS SHEET FIRST, THEN DELETE [AUTO]. DO NOT EDIT DIRECTLY — IT BREAKS AUTOMATION." Header row is row 2 and invoice data starts at row 3. The tab is protected with a warning-only range so users can copy it and then delete the `[Auto]` tab; editing directly will show a warning. To add your own columns or formatting, duplicate the [Auto] tab in Google Sheets.
+4. Parser classifies each PDF to a document type, parses fields using that type's config, and renames files. `.meta.json` sidecars are written to `local/data/outgoing/`.
+5. Write info to Report writes processed invoice details to the configured Google Sheets spreadsheet, using each document type's `report_columns` mapping to populate the fixed columns. Output is written to an `[Auto]` tab named for the invoice month/year with an `[Auto]` suffix (e.g. `Apr 2026 [Auto]`). Existing rows are matched by **PDF Invoice No.** and updated in place with the latest values; new invoice numbers are appended. The first row of the tab shows a bold red caps warning: "COPY THIS SHEET FIRST, THEN DELETE [AUTO]. DO NOT EDIT DIRECTLY — IT BREAKS AUTOMATION." Header row is row 2 and invoice data starts at row 3. The tab is protected with a warning-only range so users can copy it and then delete the `[Auto]` tab; editing directly will show a warning. To add your own columns or formatting, duplicate the [Auto] tab in Google Sheets. Use the **Overwrite** checkbox in the Advanced panel to clear and rewrite an `[Auto]` tab instead of upserting.
 6. Push uploads renamed files to `003 Finance Operations/001 Invoices/001 Google Ads/<YYYYMM>/`.
 7. Clear Drive Input removes processed originals from the Shared drive input folder.
 8. Click **Start Over** to reset the workflow when done. Use the **Advanced** panel for individual step actions.
@@ -149,9 +171,13 @@ See `docs/CHANGELOG.md` for a full history of merged features.
 ### Active config pointers
 
 - `local/local_config.json` is machine-specific and excluded from Git.
+- Relative paths in config are resolved from the **project root** (the directory containing `.git`).
+- Data folders should be written as `local/data`, `local/data/incoming`, etc.
+- Service-account keys should be written as `keys/<file>.json` (they live next to the `local/` folder at project root).
 - Current Drive paths: `003 Finance Operations/001 Invoices/001 Google Ads/000 Input Folder` and `003 Finance Operations/001 Invoices/001 Google Ads`.
 - Current rclone remote: `mydrive-service`.
 - Google Sheets reporting is configured under `google_sheets` in `local_config.json`. Enable it and set `spreadsheet_url` to append processed invoice details to monthly tabs based on invoice date. The Google Sheets API must be enabled in the same Cloud project.
+- Document types are configured under `document_types`; the default type is `googleadsinvoice`.
 
 ### Known quirks
 
@@ -161,8 +187,10 @@ See `docs/CHANGELOG.md` for a full history of merged features.
 ### Notes for future work
 
 - When adding new config fields, expose them in `ui/static/js/features/local/config.js` and update the corresponding section/label/help text.
+- When adding document-type-specific config, add it to `DocumentTypeConfig` in `local/invoice_parser/config.py`, the config editor in `ui/static/js/features/local/config.js`, and the migration validator if it should be auto-populated for legacy configs.
 - Keep config section names and labels consistent with invoice-processing language, not backend implementation details.
 - When adding new Process workflow actions, follow the existing pattern: backend method in `ui/invoice_ui/services/`, endpoint in `ui/invoice_ui/routers/`, API wrapper in `ui/static/js/core/api.js`, and UI handler in `ui/static/js/features/local/workflow.js`.
 - Google Sheets report writes follow the same workflow pattern and live in `ui/invoice_ui/services/sheets_service.py` and `ui/invoice_ui/routers/sheets_router.py`.
 - When changing the frontend, bump the cache-busting query string on the affected assets in `ui/static/index.html` (e.g. `?v=4`) so returning browsers load the new code.
 - **Update documentation**: when adding a new feature, update `docs/CHANGELOG.md`, `docs/SERVICE_ACCOUNT_SETUP.md`, `local/README.md`, and `README.md` as applicable. Only update archived docs under `project/` if they are still relevant to the current core app, and keep `project/docs/AGENTS.md` up to date when the archive changes.
+- **Keep this AGENTS.md file current** whenever docs, config behavior, workflow steps, or architecture change. SAFEWORD

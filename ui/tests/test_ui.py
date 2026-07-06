@@ -9,14 +9,80 @@ from invoice_ui.main import create_app
 
 @pytest.fixture
 def ui_client(tmp_path, monkeypatch):
-    config_path = tmp_path / "local_config.json"
+    (tmp_path / ".git").mkdir()
+    config_path = tmp_path / "local" / "local_config.json"
+    config_path.parent.mkdir()
     config_path.write_text(json.dumps({
-        "source_folder": str(tmp_path),
-        "input_folder": str(tmp_path / "incoming"),
-        "output_folder": str(tmp_path / "outgoing"),
-        "archive_folder": str(tmp_path / "archive"),
+        "source_folder": "data",
+        "input_folder": "data/incoming",
+        "output_folder": "data/outgoing",
+        "archive_folder": "data/archive",
         "filename_template": "{account}_{number}_Invoice_{date}.pdf",
         "date_format": "%Y%m%d",
+        "default_document_type": "googleadsinvoice",
+        "document_types": {
+            "googleadsinvoice": {
+                "classifier": {"patterns": ["Invoice", "Invoice number", "Invoice date"]},
+                "fields": {
+                    "account": {
+                        "parser": "account",
+                        "patterns": [{"regex": "^Account:\\s*(.+?)(?=\\s*\\[|\\s*$)", "group": 1, "flags": ["IGNORECASE", "MULTILINE"]}],
+                        "unknown_values": ["-"],
+                        "fallback": "UNKNOWN",
+                    },
+                    "number": {
+                        "parser": "number",
+                        "patterns": [{"regex": "Invoice\\s*number[:\\s]+([A-Z0-9\\-]+)", "group": 1, "flags": ["IGNORECASE"]}],
+                        "require_digit": True,
+                        "fallback_to_filename": True,
+                        "filename_pattern": "^\\d+$",
+                    },
+                    "date": {
+                        "parser": "date",
+                        "parse_formats": ["%d %B %Y", "%d %b %Y", "%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y"],
+                        "nearby_line_window": 2,
+                        "details_block": {
+                            "enabled": True,
+                            "header": "Details",
+                            "dot_separator_regex": "^\\.{5,}$",
+                            "label_regex": "Invoice\\s*number|Invoice\\s*date|Payment\\s*terms|Billing\\s*ID|Account\\s*ID",
+                            "max_label_length": 80,
+                        },
+                    },
+                    "currency": {
+                        "parser": "currency",
+                        "primary_regex": "Total\\s*amount\\s*due\\s*in\\s*([A-Z]{3})",
+                        "symbol_map": {"HK$": "HKD", "US$": "USD"},
+                    },
+                    "total": {
+                        "parser": "total",
+                        "primary_regex": "",
+                        "primary_regexes": [
+                            r"Total\s*amount\s*due(?:\s*in\s*[A-Z]{3})?[:\s]*([A-Z$€£¥]*)\s*(-?[\d,]+\.\d{2})",
+                            r"Total\s+in\s+[A-Z]{3}[:\s]*(-?)([A-Z$€£¥]*)\s*(-?[\d,]+\.\d{2})",
+                        ],
+                        "fallback_regex": r"(-?)(?:HK\$|US\$|\$|€|£|¥)\s*(-?[\d,]+\.\d{2})",
+                        "pick_max": True,
+                    },
+                },
+                "filename_template": "{account}_{number}_Invoice_{date}.pdf",
+                "placeholders": {
+                    "account": {"sanitize": True, "fallback": "UNKNOWN"},
+                    "number": {"sanitize": True, "fallback": "unknown"},
+                    "date": {"fallback": "unknown-date"},
+                    "total": {"fallback": "unknown"},
+                    "currency": {"fallback": "unknown"},
+                },
+                "manual_review_for_missing": ["account", "date"],
+                "report_columns": {
+                    "account": "Client Ref.",
+                    "date": "PDF Invoice Date",
+                    "number": "PDF Invoice No.",
+                    "currency": "Topped Currency",
+                    "total": "Topped amount",
+                },
+            }
+        },
         "rclone": {
             "enabled": False,
             "remote": "mydrive-shared",
@@ -32,15 +98,15 @@ def ui_client(tmp_path, monkeypatch):
         "google_sheets": {
             "enabled": False,
             "spreadsheet_url": None,
-            "service_account_file": None,
+            "service_account_file": "keys/test.json",
             "tab_name_template": "%b %Y",
             "date_format": "%d/%m/%Y",
             "skip_existing_by": "number",
         },
     }), encoding="utf-8")
 
-    (tmp_path / "incoming").mkdir()
-    (tmp_path / "outgoing").mkdir()
+    (tmp_path / "data" / "incoming").mkdir(parents=True)
+    (tmp_path / "data" / "outgoing").mkdir(parents=True)
 
     monkeypatch.setenv("INVOICE_UI_CONFIG_PATH", str(config_path))
 
@@ -54,11 +120,71 @@ def test_config_read_write(ui_client):
     assert res.status_code == 200
     cfg = res.json()["config"]
     assert cfg["date_format"] == "%Y%m%d"
+    assert "document_types" in cfg
 
     cfg["date_format"] = "%Y-%m-%d"
     res = ui_client.post("/api/config", json={"config": cfg})
     assert res.status_code == 200
     assert res.json()["config"]["date_format"] == "%Y-%m-%d"
+    assert "document_types" in res.json()["config"]
+
+
+def test_config_round_trip_preserves_document_types(ui_client, tmp_path):
+    res = ui_client.get("/api/config")
+    assert res.status_code == 200
+    cfg = res.json()["config"]
+
+    cfg["document_types"]["testtype"] = {
+        "classifier": {"patterns": ["Test"]},
+        "fields": {},
+        "filename_template": "{number}.pdf",
+        "placeholders": {},
+        "manual_review_for_missing": [],
+        "report_columns": {},
+    }
+    cfg["default_document_type"] = "testtype"
+
+    res = ui_client.post("/api/config", json={"config": cfg})
+    assert res.status_code == 200
+    saved = res.json()["config"]
+    assert "testtype" in saved["document_types"]
+    assert saved["default_document_type"] == "testtype"
+    assert saved["document_types"]["testtype"]["filename_template"] == "{number}.pdf"
+
+    # Paths saved back should be relative
+    assert not Path(saved["source_folder"]).is_absolute()
+    assert not Path(saved["google_sheets"]["service_account_file"]).is_absolute()
+
+    # Default googleadsinvoice report columns should be preserved
+    googleadsinvoice = saved["document_types"]["googleadsinvoice"]
+    assert googleadsinvoice["report_columns"]["account"] == "Client Ref."
+    assert googleadsinvoice["report_columns"]["total"] == "Topped amount"
+
+
+def test_config_round_trip_preserves_report_columns(ui_client):
+    res = ui_client.get("/api/config")
+    assert res.status_code == 200
+    cfg = res.json()["config"]
+
+    cfg["document_types"]["googleadsinvoice"]["report_columns"] = {
+        "number": "Client Ref.",
+        "account": "Invoice No.",
+        "date": "Invoice Date",
+        "total": "Topped amount",
+        "currency": "Topped Currency",
+    }
+
+    res = ui_client.post("/api/config", json={"config": cfg})
+    assert res.status_code == 200
+    saved = res.json()["config"]
+    report_columns = saved["document_types"]["googleadsinvoice"]["report_columns"]
+    assert report_columns["number"] == "Client Ref."
+    assert report_columns["account"] == "Invoice No."
+    assert report_columns["date"] == "Invoice Date"
+    assert report_columns["total"] == "Topped amount"
+    assert report_columns["currency"] == "Topped Currency"
+    assert "Client Ref." in report_columns.values()
+    assert "Invoice No." in report_columns.values()
 
 
 def test_config_validation_rejects_invalid(ui_client):
@@ -70,9 +196,9 @@ def test_config_validation_rejects_invalid(ui_client):
 
 
 def test_files_list(ui_client, tmp_path):
-    incoming = tmp_path / "incoming"
+    incoming = tmp_path / "data" / "incoming"
     (incoming / "test.pdf").write_bytes(b"dummy")
-    outgoing = tmp_path / "outgoing"
+    outgoing = tmp_path / "data" / "outgoing"
     (outgoing / "done.pdf").write_bytes(b"dummy")
 
     res = ui_client.get("/api/files")
@@ -86,7 +212,7 @@ def test_files_list(ui_client, tmp_path):
 
 
 def test_download_file(ui_client, tmp_path):
-    incoming = tmp_path / "incoming"
+    incoming = tmp_path / "data" / "incoming"
     (incoming / "download_me.pdf").write_bytes(b"pdf-content")
 
     res = ui_client.get("/files/incoming/download_me.pdf")
@@ -171,7 +297,7 @@ def test_write_report_requires_preview(ui_client):
 
 
 def test_write_report_requires_rename(ui_client, tmp_path, monkeypatch):
-    pdf = tmp_path / "incoming" / "test.pdf"
+    pdf = tmp_path / "data" / "incoming" / "test.pdf"
     pdf.write_bytes(b"%PDF-1.4 dummy")
 
     monkeypatch.setattr("invoice_parser.processor.extract_text", lambda _path: """Account: Test Client [12345]
@@ -189,6 +315,12 @@ Total amount due in HKD: HK$ 9,999.99
     assert data["success"] is False
     assert "rename" in data["error"].lower()
 
+    res = ui_client.post("/api/sheets/write", json={"overwrite": True})
+    assert res.status_code == 200
+    data = res.json()
+    assert data["success"] is False
+    assert "rename" in data["error"].lower()
+
     res = ui_client.post("/api/parse/run", json={"dry_run": False})
     assert res.status_code == 200
     assert res.json()["success"] is True
@@ -201,7 +333,7 @@ Total amount due in HKD: HK$ 9,999.99
 
 
 def test_write_report_disabled_by_default(ui_client, tmp_path, monkeypatch):
-    pdf = tmp_path / "incoming" / "test.pdf"
+    pdf = tmp_path / "data" / "incoming" / "test.pdf"
     pdf.write_bytes(b"%PDF-1.4 dummy")
 
     monkeypatch.setattr("invoice_parser.processor.extract_text", lambda _path: """Account: Test Client [12345]
@@ -233,7 +365,7 @@ def test_download_csv_requires_preview(ui_client):
 
 
 def test_download_csv_after_preview(ui_client, tmp_path, monkeypatch):
-    pdf = tmp_path / "incoming" / "test.pdf"
+    pdf = tmp_path / "data" / "incoming" / "test.pdf"
     pdf.write_bytes(b"%PDF-1.4 dummy")
 
     monkeypatch.setattr("invoice_parser.processor.extract_text", lambda _path: """Account: Test Client [12345]
@@ -260,8 +392,62 @@ Total amount due in HKD: HK$ 9,999.99
     assert "5561278890" not in content
 
 
+def test_download_csv_uses_alternate_report_columns(ui_client, tmp_path, monkeypatch):
+    pdf = tmp_path / "data" / "incoming" / "test.pdf"
+    pdf.write_bytes(b"%PDF-1.4 dummy")
+
+    monkeypatch.setattr("invoice_parser.processor.extract_text", lambda _path: """Account: Jane Doe
+Invoice number: R-001
+Invoice date: 15 April 2024
+Total amount due in HKD: HK$ 500.00
+""")
+
+    res = ui_client.get("/api/config")
+    cfg = res.json()["config"]
+    cfg["document_types"] = {
+        "googleadsinvoice": {
+            "classifier": {"patterns": ["Invoice"]},
+            "fields": {},
+            "filename_template": "{account}_{number}_Invoice_{date}.pdf",
+            "placeholders": {},
+            "manual_review_for_missing": [],
+            "report_columns": {
+                "number": "Client Ref.",
+                "account": "Invoice No.",
+                "date": "Invoice Date",
+                "total": "Topped amount",
+                "currency": "Topped Currency",
+            },
+        }
+    }
+    res = ui_client.post("/api/config", json={"config": cfg})
+    assert res.status_code == 200
+
+    res = ui_client.post("/api/parse/preview")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["processed_count"] == 1
+
+    res = ui_client.post("/api/parse/update", json={
+        "source_name": "test.pdf",
+        "fields": {"number": "R-001", "account": "Jane Doe"},
+    })
+    assert res.status_code == 200
+
+    res = ui_client.post("/api/reports/export")
+    assert res.status_code == 200
+    content = res.content.decode("utf-8-sig")
+    lines = content.strip().split("\n")
+    header = lines[0].split(",")
+    data_row = lines[1].split(",")
+    client_ref_idx = header.index("Client Ref.")
+    invoice_no_idx = header.index("Invoice No.")
+    assert data_row[client_ref_idx] == "R-001"
+    assert data_row[invoice_no_idx] == "Jane Doe"
+
+
 def test_parse_update_recomputes_target_and_status(ui_client, tmp_path, monkeypatch):
-    pdf = tmp_path / "incoming" / "test.pdf"
+    pdf = tmp_path / "data" / "incoming" / "test.pdf"
     pdf.write_bytes(b"%PDF-1.4 dummy")
 
     monkeypatch.setattr("invoice_parser.processor.extract_text", lambda _path: """Account: Test Client [12345]
@@ -287,7 +473,7 @@ Total amount due in HKD: HK$ 9,999.99
 
 
 def test_run_uses_preview_results(ui_client, tmp_path, monkeypatch):
-    pdf = tmp_path / "incoming" / "test.pdf"
+    pdf = tmp_path / "data" / "incoming" / "test.pdf"
     pdf.write_bytes(b"%PDF-1.4 dummy")
 
     monkeypatch.setattr("invoice_parser.processor.extract_text", lambda _path: """Account: Test Client [12345]
@@ -310,12 +496,12 @@ Total amount due in HKD: HK$ 9,999.99
     data = res.json()
     assert data["success"] is True
 
-    assert (tmp_path / "outgoing" / "Edited_Account_5561278890_Invoice_20240415.pdf").exists()
+    assert (tmp_path / "data" / "outgoing" / "Edited_Account_5561278890_Invoice_20240415.pdf").exists()
     assert not pdf.exists()
 
 
 def test_clear_incoming_deletes_local_files(ui_client, tmp_path):
-    pdf = tmp_path / "incoming" / "test.pdf"
+    pdf = tmp_path / "data" / "incoming" / "test.pdf"
     pdf.write_bytes(b"%PDF-1.4 dummy")
 
     res = ui_client.post("/api/files/clear-incoming")
@@ -335,9 +521,9 @@ def test_clear_incoming_when_folder_empty(ui_client, tmp_path):
 
 
 def test_clear_outgoing_deletes_local_files(ui_client, tmp_path):
-    pdf = tmp_path / "outgoing" / "test.pdf"
+    pdf = tmp_path / "data" / "outgoing" / "test.pdf"
     pdf.write_bytes(b"%PDF-1.4 dummy")
-    meta = tmp_path / "outgoing" / "test.pdf.meta.json"
+    meta = tmp_path / "data" / "outgoing" / "test.pdf.meta.json"
     meta.write_text("{}", encoding="utf-8")
 
     res = ui_client.post("/api/files/clear-outgoing")

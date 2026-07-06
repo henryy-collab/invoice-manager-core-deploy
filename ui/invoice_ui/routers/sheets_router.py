@@ -6,10 +6,17 @@ router = APIRouter(prefix="/api/sheets", tags=["sheets"])
 
 
 @router.post("/write")
-def write_to_report(request: Request):
+async def write_to_report(request: Request):
     service = SheetsService.from_request(request)
     try:
-        result = service.write_last_preview_results()
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    overwrite = bool(body.get("overwrite"))
+    try:
+        result = service.write_last_preview_results(overwrite=overwrite)
         return result
     except Exception as exc:
         return {"success": False, "error": f"Unexpected error writing to report: {exc}"}

@@ -78,8 +78,8 @@ const api = {
     return this.post("/api/files/clear-outgoing");
   },
 
-  writeToReport() {
-    return this.post("/api/sheets/write");
+  writeToReport(overwrite = false) {
+    return this.post("/api/sheets/write", { overwrite });
   },
 
   logs(limit = 200) {

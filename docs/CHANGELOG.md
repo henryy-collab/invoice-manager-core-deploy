@@ -2,6 +2,35 @@
 
 A record of merged features and notable changes for Invoice Manager Core.
 
+## 2026-07-03 — Document types architecture and config-driven parsing
+
+- **Document types registry**: `local/local_config.json` now has a top-level `document_types` section. Each type owns its own classifier, field parsers, filename template, placeholders, manual-review fields, and report column mappings.
+- **Document type classification**: PDFs are classified by matching keyword patterns in the extracted text; the best-matching document type's config is used for parsing and filename generation.
+- **Strategy-based field parsing**: field parsers are selected by the `parser` key inside each document type's `fields` config, making it easier to add new document types and custom parsers.
+- **Per-document-type reports**: CSV and Google Sheets output now use each document type's `report_columns` mapping to populate the fixed column headers.
+- **Document types config editor**: the UI Config tab now shows a document-type selector and per-type editor for classifier, filename, placeholders, field parsers, manual-review fields, and report columns.
+- **Config migration**: when `document_types` is missing, the app automatically builds a default `googleadsinvoice` type from the old flat `parsers`, `filename_template`, and `features.manual_review_for_missing` settings.
+
+## 2026-07-03 — Upsert Google Sheets report by PDF Invoice No.
+
+- `Write info to Report` now uses the **PDF Invoice No.** column as the unique key.
+- Existing invoice numbers are updated in place with the latest parsed values instead of being skipped or duplicated.
+- New invoice numbers are appended to the bottom of the sheet.
+- Existing `[Auto]` sheets are no longer cleared or reformatted when re-opened; the warning and header rows are only written for new sheets.
+- Warning row is now merged across all header columns, larger, bold, red text on a bright yellow background, and center-aligned.
+- The **Overwrite** checkbox remains available in the Advanced panel as a legacy option to clear and rewrite the sheet.
+
+
+- The total parser now looks for `Total amount due in <CURRENCY>` / `Total in <CURRENCY>` and returns the **last amount** in the following block.
+- This fixes wrong totals caused by PDF column layout reordering lines during text extraction.
+- Negative credit-note totals (e.g., `-HK$40.83`) are now preserved.
+
+## 2026-07-03 — Root-relative config paths
+
+- All relative paths in `local/local_config.json` are now resolved from the project root (the directory containing `.git`).
+- This lets the service-account key live in a top-level `keys/` folder while data folders stay under `local/data/`.
+- Paths are persisted back as relative values when saved through the UI.
+
 ## 2026-06-25 — Currency column in Google Sheets report
 
 - Google Sheets report rows now include **Topped Currency** before **Topped amount**.

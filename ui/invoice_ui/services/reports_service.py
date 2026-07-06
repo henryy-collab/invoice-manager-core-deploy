@@ -3,7 +3,7 @@ import io
 from dataclasses import dataclass
 from datetime import datetime
 
-from invoice_parser.config import AppConfig
+from invoice_parser.config import AppConfig, DocumentTypeConfig
 
 
 @dataclass
@@ -42,14 +42,33 @@ _COLUMNS = [
 ]
 
 
-def _result_to_row(result) -> ReportRow:
+_COLUMN_TO_ATTR = {
+    "Client Ref.": "client_ref",
+    "Platform": "platform",
+    "Agreed Amount": "agreed_amount",
+    "Invoice No.": "invoice_no",
+    "Amount": "amount",
+    "Invoice Date": "invoice_date",
+    "Paid Date": "paid_date",
+    "AM": "am",
+    "PM": "pm",
+    "Informed AM & PM": "informed_am_pm",
+    "Top up date": "top_up_date",
+    "Topped Currency": "topped_currency",
+    "Topped amount": "topped_amount",
+    "Balance": "balance",
+}
+
+
+def _result_to_row(result, type_config: DocumentTypeConfig) -> ReportRow:
+    row = ReportRow()
     fields = result.fields
-    return ReportRow(
-        client_ref=fields.get("account") or "",
-        invoice_date=fields.get("date") or "",
-        topped_currency=fields.get("currency") or "",
-        topped_amount=fields.get("total") or "",
-    )
+    column_to_field = {column: field for field, column in type_config.report_columns.items()}
+    for column, attr in _COLUMN_TO_ATTR.items():
+        field = column_to_field.get(column)
+        if field is not None:
+            setattr(row, attr, fields.get(field) or "")
+    return row
 
 
 def _row_to_list(row: ReportRow) -> list[str]:
@@ -71,15 +90,22 @@ def _row_to_list(row: ReportRow) -> list[str]:
     ]
 
 
-def build_report_rows(results: list) -> list[ReportRow]:
-    return [_result_to_row(r) for r in results]
+def build_report_rows(results: list, config: AppConfig) -> list[ReportRow]:
+    rows = []
+    for result in results:
+        type_config = config.document_types.get(
+            getattr(result, "document_type", config.default_document_type),
+            config.document_types[config.default_document_type],
+        )
+        rows.append(_result_to_row(result, type_config))
+    return rows
 
 
-def generate_csv_content(results: list) -> str:
+def generate_csv_content(results: list, config: AppConfig) -> str:
     buffer = io.StringIO(newline="")
     writer = csv.writer(buffer)
     writer.writerow(_COLUMNS)
-    for row in build_report_rows(results):
+    for row in build_report_rows(results, config):
         writer.writerow(_row_to_list(row))
     return buffer.getvalue()
 

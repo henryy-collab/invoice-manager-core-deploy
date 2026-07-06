@@ -3,7 +3,7 @@ from pathlib import Path
 
 from fastapi import Request
 
-from invoice_parser.config import AppConfig
+from invoice_parser.config import AppConfig, DocumentTypeConfig
 from invoice_parser.files import (
     archive_original,
     is_already_processed,
@@ -13,7 +13,7 @@ from invoice_parser.files import (
 )
 from invoice_parser.filename import build_filename, resolve_unique_name
 from invoice_parser.logging import log_info
-from invoice_parser.models import Invoice
+from invoice_parser.models import DEFAULT_DOCUMENT_TYPE, Document, Invoice
 from invoice_parser.processor import (
     _resolve_target_name,
     _write_run_state,
@@ -46,6 +46,9 @@ class ParseService:
             get_config_path(request),
             get_logger(request),
         )
+
+    def _default_type_config(self) -> DocumentTypeConfig:
+        return self.config.document_types[self.config.default_document_type]
 
     def preview(self) -> ParseResponse:
         global _last_results_renamed
@@ -84,6 +87,7 @@ class ParseService:
                     target_name=pdf_path.name,
                     needs_manual_review=True,
                     number_fallback_used=False,
+                    document_type=self.config.default_document_type,
                 ))
 
         return self._store_and_respond(results, processed, manual_review, skipped, failed)
@@ -108,9 +112,12 @@ class ParseService:
             if merged_fields[key] == "":
                 merged_fields[key] = None
 
-        invoice = Invoice(**merged_fields)
+        type_config = self.config.document_types.get(
+            updated.document_type, self._default_type_config()
+        )
+        document = Document(**merged_fields)
         missing = missing_required_fields(
-            invoice, self.config.features.manual_review_for_missing, self.config.parsers.account
+            document, type_config.manual_review_for_missing, type_config.fields
         )
 
         output = Path(self.config.output_folder)
@@ -119,7 +126,8 @@ class ParseService:
             Path(self.config.input_folder) / source_name,
             output,
             self.config,
-            invoice,
+            type_config,
+            document,
             missing,
             used_names,
         )
@@ -127,11 +135,12 @@ class ParseService:
         updated_item = ParseResultItem(
             source_name=source_name,
             source_path=updated.source_path,
-            fields=invoice.to_dict(),
+            fields=document.to_dict(),
             missing_required=missing,
             target_name=target_name,
             needs_manual_review=bool(missing),
             number_fallback_used=updated.number_fallback_used,
+            document_type=updated.document_type,
         )
 
         new_results = [updated_item if r.source_name == source_name else r for r in _last_results]
@@ -146,13 +155,17 @@ class ParseService:
         output = Path(self.config.output_folder)
         used_names: set[Path] = set()
         for i, item in enumerate(results):
-            invoice = Invoice(**item.fields)
+            document = Document(**item.fields)
+            type_config = self.config.document_types.get(
+                item.document_type, self._default_type_config()
+            )
             pdf_path = Path(item.source_path)
             target_name = _resolve_target_name(
                 pdf_path,
                 output,
                 self.config,
-                invoice,
+                type_config,
+                document,
                 item.missing_required,
                 used_names,
             )
@@ -198,7 +211,7 @@ class ParseService:
                 if item.needs_manual_review:
                     rename_pdf(pdf_path, target, dry_run, self.logger, "MANUAL_REVIEW")
                     if not dry_run:
-                        write_metadata_file(target, Invoice(**item.fields))
+                        write_metadata_file(target, Document(**item.fields))
                     manual_review.append(item.source_name)
                     continue
 
@@ -207,7 +220,7 @@ class ParseService:
 
                 rename_pdf(pdf_path, target, dry_run, self.logger)
                 if not dry_run:
-                    write_metadata_file(target, Invoice(**item.fields))
+                    write_metadata_file(target, Document(**item.fields))
                 processed.append(item.source_name)
             except Exception as exc:
                 log_info(self.logger, "PROCESS_FAILED", {"file": item.source_name, "error": str(exc)})
@@ -230,11 +243,12 @@ class ParseService:
         return ParseResultItem(
             source_name=source_name,
             source_path=str(result.source_path),
-            fields=result.invoice.to_dict(),
+            fields=result.document.to_dict(),
             missing_required=result.missing_required,
             target_name=result.target_name,
             needs_manual_review=result.needs_manual_review,
             number_fallback_used=result.number_fallback_used,
+            document_type=result.document_type,
         )
 
     def _empty_response(self) -> ParseResponse:

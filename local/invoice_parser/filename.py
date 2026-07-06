@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Optional
 
 from invoice_parser.config import FilenameConfig, PlaceholderConfig
+from invoice_parser.models import Document
 
 
 def sanitize(value: str) -> str:
@@ -20,13 +21,10 @@ def _format_placeholder(value: Optional[str], placeholder: PlaceholderConfig) ->
     return value
 
 
-def build_filename(template: str, invoice, config: FilenameConfig) -> str:
+def build_filename(template: str, document: Document, config: FilenameConfig) -> str:
     placeholders = {
-        "account": _format_placeholder(invoice.account, config.placeholders["account"]),
-        "number": _format_placeholder(invoice.number, config.placeholders["number"]),
-        "date": _format_placeholder(invoice.date, config.placeholders["date"]),
-        "total": _format_placeholder(invoice.total, config.placeholders["total"]),
-        "currency": _format_placeholder(invoice.currency, config.placeholders["currency"]),
+        key: _format_placeholder(document.get(key), placeholder_config)
+        for key, placeholder_config in config.placeholders.items()
     }
     result = template
     for key, value in placeholders.items():

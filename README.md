@@ -76,10 +76,10 @@ local/data/
 └── state/        ← last_run_processed.json
 ```
 
-`local/local_config.json` and `local/data/` are excluded from Git.
+`local/data/` is excluded from Git.
 
 ## Notes
 
-- Keep `local/local_config.json` out of Git; it is machine-specific.
+- `local/local_config.json` is machine-specific and may contain local paths; review it before committing shared changes.
 - The UI has no authentication; run it only on a trusted network.
 - After UI updates, hard-refresh the browser (`Ctrl+F5`) to clear cached assets.

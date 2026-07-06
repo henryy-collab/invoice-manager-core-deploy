@@ -4,7 +4,7 @@ from pathlib import Path
 from fastapi import Request
 from pydantic import ValidationError
 
-from invoice_parser.config import AppConfig
+from invoice_parser.config import AppConfig, make_config_paths_relative
 from invoice_ui.dependencies import get_config_path
 
 
@@ -21,6 +21,7 @@ class ConfigService:
 
     def save(self, data: dict) -> AppConfig:
         config = AppConfig.model_validate(data)
+        config = make_config_paths_relative(config, self.config_path)
         self.config_path.write_text(
             json.dumps(config.model_dump(mode="json"), indent=2, ensure_ascii=False),
             encoding="utf-8",

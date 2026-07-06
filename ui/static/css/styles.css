@@ -549,6 +549,20 @@ h1 {
   flex-wrap: wrap;
   gap: 0.5rem;
   padding: 0 1rem 1rem;
+  align-items: center;
+}
+
+.advanced-panel-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.advanced-panel-checkbox input[type="checkbox"] {
+  margin: 0;
 }
 
 @media (max-width: 900px) {
@@ -782,6 +796,102 @@ tr.pending-edit .inline-edit {
 .form-group textarea {
   min-height: 5rem;
   resize: vertical;
+}
+
+.document-types-panel {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 2px solid var(--border);
+}
+
+.document-type-selector {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1rem;
+  align-self: start;
+}
+
+.document-type-selector h3 {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+  font-size: 1rem;
+}
+
+.document-type-list {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+}
+
+.document-type-list li {
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.document-type-list li:hover {
+  background: #e5e7eb;
+}
+
+.document-type-list li.active {
+  background: var(--sidebar-bg);
+  color: #ffffff;
+}
+
+.document-type-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.document-type-actions .btn {
+  width: 100%;
+  text-align: center;
+}
+
+.document-type-editor {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1rem;
+}
+
+.document-type-editor h3 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  font-size: 1.1rem;
+}
+
+.document-type-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.field-card {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.75rem;
+  background: #ffffff;
+}
+
+.field-card h4 {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+  text-transform: capitalize;
+}
+
+.field-card textarea {
+  min-height: 7rem;
+}
+
+.config-global-sections {
+  margin-bottom: 1rem;
 }
 
 .alert {

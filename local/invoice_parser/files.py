@@ -4,8 +4,9 @@ import shutil
 from pathlib import Path
 from typing import Optional
 
-from invoice_parser.config import AccountParserConfig, FilenameConfig
+from invoice_parser.config import AccountParserConfig, FieldConfig, FilenameConfig
 from invoice_parser.logging import log_info
+from invoice_parser.models import Document
 from invoice_parser.parsers.account import normalize_account
 
 
@@ -17,12 +18,14 @@ def is_already_processed(name: str, patterns: list[str]) -> bool:
 
 
 def missing_required_fields(
-    invoice, required: list[str], account_config: AccountParserConfig
+    document: Document, required: list[str], fields_config: dict[str, FieldConfig]
 ) -> list[str]:
     missing = []
     for field in required:
-        value = getattr(invoice, field)
-        if field == "account":
+        value = getattr(document, field)
+        field_config = fields_config.get(field)
+        if field == "account" and field_config is not None:
+            account_config = AccountParserConfig.model_validate(field_config.model_dump())
             value = normalize_account(value, account_config)
             if value == account_config.fallback:
                 missing.append(field)
@@ -51,9 +54,9 @@ def archive_original(
         log_info(logger, "ARCHIVED", {"file": pdf_path.name, "archive": str(archive_dir)})
 
 
-def write_metadata_file(target: Path, invoice) -> None:
+def write_metadata_file(target: Path, document: Document) -> None:
     meta_path = target.with_suffix(target.suffix + ".meta.json")
-    meta = invoice.to_dict()
+    meta = document.to_dict()
     meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
 

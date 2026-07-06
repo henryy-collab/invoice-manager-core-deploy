@@ -3,7 +3,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-from invoice_parser.config import AccountParserConfig, AppConfig
+from invoice_parser.classifier import classify_document
+from invoice_parser.config import AppConfig, DocumentTypeConfig
 from invoice_parser.extractor import extract_text
 from invoice_parser.filename import build_filename, resolve_unique_name
 from invoice_parser.files import (
@@ -15,18 +16,23 @@ from invoice_parser.files import (
 )
 
 from invoice_parser.logging import log_error, log_info
-from invoice_parser.models import Invoice
-from invoice_parser.parsers.invoice import parse_invoice
+from invoice_parser.models import DEFAULT_DOCUMENT_TYPE, Document, Invoice
+from invoice_parser.parsers.invoice import parse_document
 
 
 @dataclass
 class ParseResult:
     source_path: Path
     text: Optional[str]
-    invoice: Invoice
+    document: Document
     missing_required: list[str] = field(default_factory=list)
     target_name: Optional[str] = None
     number_fallback_used: bool = False
+    document_type: str = DEFAULT_DOCUMENT_TYPE
+
+    @property
+    def invoice(self) -> Document:
+        return self.document
 
     @property
     def needs_manual_review(self) -> bool:
@@ -35,11 +41,12 @@ class ParseResult:
     def to_dict(self) -> dict:
         return {
             "source_path": str(self.source_path),
-            "fields": self.invoice.to_dict(),
+            "fields": self.document.to_dict(),
             "missing_required": self.missing_required,
             "target_name": self.target_name,
             "number_fallback_used": self.number_fallback_used,
             "needs_manual_review": self.needs_manual_review,
+            "document_type": self.document_type,
         }
 
 
@@ -47,7 +54,8 @@ def _resolve_target_name(
     pdf_path: Path,
     output: Path,
     config: AppConfig,
-    invoice: Invoice,
+    type_config: DocumentTypeConfig,
+    document: Document,
     missing: list[str],
     used_names: set[Path],
 ) -> str:
@@ -61,7 +69,7 @@ def _resolve_target_name(
             track=config.features.deduplicate_within_run,
         )
     else:
-        new_name = build_filename(config.filename_template, invoice, config.filename)
+        new_name = build_filename(type_config.filename_template, document, type_config)
         target = resolve_unique_name(
             output,
             new_name,
@@ -91,27 +99,36 @@ def parse_single_pdf(
 ) -> ParseResult:
     output = Path(config.output_folder)
     text = extract_text(pdf_path)
-    invoice = parse_invoice(text, pdf_path.stem, config)
+    document_type = classify_document(text, config.document_types, config.default_document_type)
+    type_config = config.document_types[document_type]
+    document = parse_document(text, pdf_path.stem, config, type_config=type_config, document_type=document_type)
 
     missing = missing_required_fields(
-        invoice, config.features.manual_review_for_missing, config.parsers.account
+        document, type_config.manual_review_for_missing, type_config.fields
     )
 
     number_fallback_used = False
-    if not invoice.number and config.features.number_fallback_to_filename:
-        invoice.number = pdf_path.stem
+    number_config = type_config.fields.get("number")
+    if (
+        number_config is not None
+        and number_config.parser == "number"
+        and not document.number
+        and config.features.number_fallback_to_filename
+    ):
+        document.number = pdf_path.stem
         number_fallback_used = True
 
     used = used_names if used_names is not None else set()
-    target_name = _resolve_target_name(pdf_path, output, config, invoice, missing, used)
+    target_name = _resolve_target_name(pdf_path, output, config, type_config, document, missing, used)
 
     return ParseResult(
         source_path=pdf_path,
         text=text,
-        invoice=invoice,
+        document=document,
         missing_required=missing,
         target_name=target_name,
         number_fallback_used=number_fallback_used,
+        document_type=document_type,
     )
 
 
@@ -142,17 +159,17 @@ def process_pdfs(config: AppConfig, logger, test_file: Optional[Path] = None):
             log_info(logger, "PARSE_START", {"file": pdf_path.name})
 
             result = parse_single_pdf(pdf_path, config, used_names=used_names)
-            log_info(logger, "PARSE_FIELDS", {"file": pdf_path.name, "fields": result.invoice.to_dict()})
+            log_info(logger, "PARSE_FIELDS", {"file": pdf_path.name, "fields": result.document.to_dict()})
 
             if result.number_fallback_used:
-                log_info(logger, "NUMBER_FALLBACK", {"file": pdf_path.name, "number": result.invoice.number})
+                log_info(logger, "NUMBER_FALLBACK", {"file": pdf_path.name, "number": result.document.number})
 
             target = output / result.target_name
 
             if result.needs_manual_review:
                 rename_pdf(pdf_path, target, config.features.dry_run, logger, "MANUAL_REVIEW")
                 if not config.features.dry_run:
-                    write_metadata_file(target, result.invoice)
+                    write_metadata_file(target, result.document)
                 log_error(
                     logger,
                     "MANUAL_REVIEW_RENAME",
@@ -170,7 +187,7 @@ def process_pdfs(config: AppConfig, logger, test_file: Optional[Path] = None):
 
             rename_pdf(pdf_path, target, config.features.dry_run, logger)
             if not config.features.dry_run:
-                write_metadata_file(target, result.invoice)
+                write_metadata_file(target, result.document)
 
             processed.append(pdf_path.name)
 

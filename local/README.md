@@ -1,13 +1,13 @@
 # Local Invoice Parser and Renamer
 
-This Python script reads PDF invoices downloaded by the Google Apps Script downloader, extracts key fields using **PyMuPDF**, and renames the files.
+This Python script reads PDF invoices, extracts key fields using **PyMuPDF**, and renames the files.
 
 ## What it does
 
 - Scans a configured source folder for PDFs.
 - Extracts text from each PDF with PyMuPDF (fast, low memory, no external AI models).
-- Parses account, invoice number, invoice date, total amount, and currency using configurable regex patterns.
-- Renames files to `{account}_{number}_Invoice_{date}.pdf`.
+- Classifies each PDF to a configured **document type** and parses account, invoice number, invoice date, total amount, and currency using per-type regex patterns.
+- Renames files based on a per-document-type filename template.
 - Uses the original filename as the invoice number if the PDF text does not contain it (configurable).
 - Falls back to `000_<original>.pdf` when configured required fields cannot be found, so manual-review files sort to the top.
 - Copies the **original** PDF to an `archive/` subfolder before renaming (configurable).
@@ -26,85 +26,37 @@ Docling consistently hit `std::bad_alloc` errors during layout preprocessing on 
    ```powershell
    python -m pip install -r requirements.txt
    ```
-3. Copy `local_config.example.json` to `local_config.json` and edit `source_folder` to point at your synced Drive folder.
+3. Copy `local_config.example.json` to `local_config.json` and edit paths if needed.
 
 ## Configuration
 
-`local_config.json` (copy from `local_config.example.json`):
+`local_config.json` (copy from `local_config.example.json`) is organised into global settings and a `document_types` registry.
+
+### Global settings
 
 ```json
 {
-  "source_folder": "G:\\\\...\\\\Test Destination",
-  "filename_template": "{account}_{number}_Invoice_{date}.pdf",
-  "date_format": "%Y%m%d",
-  "archive_folder": "archive",
-  "log_file": "parse_and_rename.log",
+  "source_folder": "local/data",
+  "input_folder": "local/data/incoming",
+  "output_folder": "local/data/outgoing",
+  "archive_folder": "local/data/archive",
+  "log_file": "local/data/logs/parse_and_rename.log",
   "timezone": "Asia/Hong_Kong",
+  "default_document_type": "googleadsinvoice",
 
   "features": {
     "archive": true,
     "skip_already_processed": true,
-    "manual_review_for_missing": ["account", "date"],
     "number_fallback_to_filename": true,
     "deduplicate_within_run": true,
     "dry_run": false
   },
 
-  "archive": {
-    "mode": "copy_original"
-  },
-
-  "parsers": {
-    "account": {
-      "patterns": [
-        {"regex": "^Account:\\\\s*(.+?)(?=\\\\s*\\\\[|\\\\s*$)", "group": 1, "flags": ["IGNORECASE", "MULTILINE"]},
-        {"regex": "Account\\\\s*ID[:\\\\s]+([\\\\d\\\\-]+)", "group": 1, "flags": ["IGNORECASE"]}
-      ],
-      "unknown_values": ["-", "—", "--", "N/A", "n/a"],
-      "fallback": "UNKNOWN"
-    },
-    "number": {
-      "patterns": [
-        {"regex": "Invoice\\\\s*number[:\\\\s]+([A-Z0-9\\\\-]+)", "group": 1, "flags": ["IGNORECASE"]}
-      ],
-      "require_digit": true,
-      "fallback_to_filename": true,
-      "filename_pattern": "^\\\\d+$"
-    },
-    "date": {
-      "parse_formats": ["%d %B %Y", "%d %b %Y", "%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y"],
-      "nearby_line_window": 2,
-      "details_block": {
-        "enabled": true,
-        "header": "Details",
-        "dot_separator_regex": "^\\\\.{5,}$",
-        "label_regex": "Invoice\\\\s*number|Invoice\\\\s*date|Payment\\\\s*terms|Billing\\\\s*ID|Account\\\\s*ID|Tax\\\\s*Invoice",
-        "max_label_length": 80
-      }
-    },
-    "currency": {
-      "primary_regex": "Total\\\\s*amount\\\\s*due\\\\s*in\\\\s*([A-Z]{3})",
-      "symbol_map": {"HK$": "HKD", "US$": "USD", "€": "EUR", "£": "GBP", "¥": "JPY"}
-    },
-    "total": {
-      "primary_regex": "Total\\\\s*amount\\\\s*due(?:\\\\s*in\\\\s*[A-Z]{3})?[:\\\\s]*([A-Z$€£¥]*)\\\\s*([\\\\d,]+\\\\.\\\\d{2})",
-      "fallback_regex": "(?:HK\\\\$|US\\\\$|\\\\$|€|£|¥)\\\\s*([\\\\d,]+\\\\.\\\\d{2})",
-      "pick_max": true
-    }
-  },
-
   "filename": {
-    "placeholders": {
-      "account": {"sanitize": true, "fallback": "UNKNOWN"},
-      "number": {"sanitize": true, "fallback": "unknown"},
-      "date": {"fallback": "unknown-date"},
-      "total": {"fallback": "unknown"},
-      "currency": {"fallback": "unknown"}
-    },
     "manual_review_prefix": "000_",
     "already_processed_patterns": [
-      "_Invoice_\\\\d{8}\\\\.pdf$",
-      "_unparsed\\\\.pdf$",
+      "_Invoice_\\d{8}\\.pdf$",
+      "_unparsed\\.pdf$",
       "^000_"
     ],
     "collision_suffix": "_{counter}"
@@ -112,13 +64,101 @@ Docling consistently hit `std::bad_alloc` errors during layout preprocessing on 
 }
 ```
 
-- `source_folder`: root data folder. Other folders can be set relative to this.
-- `input_folder`: folder where unprocessed invoice PDFs are placed before running.
-- `output_folder`: folder where renamed invoice PDFs are saved after running.
+- `source_folder`, `input_folder`, `output_folder`, `archive_folder`, `log_file`: relative paths are resolved from the **project root** (the directory containing `.git`).
+- `default_document_type`: the document type used when no classifier pattern matches.
+- `features`: global processing behaviour.
+- `filename`: global manual-review prefix, already-processed patterns, and collision suffix.
+
+### Document types
+
+Each entry under `document_types` describes how to recognise and parse one kind of document:
+
+```json
+{
+  "document_types": {
+    "googleadsinvoice": {
+      "classifier": {
+        "patterns": ["Invoice", "Invoice number", "Invoice date"]
+      },
+      "fields": {
+        "account": {
+          "parser": "account",
+          "patterns": [
+            {"regex": "^Account:\\s*(.+?)(?=\\s*\\[|\\s*$)", "group": 1, "flags": ["IGNORECASE", "MULTILINE"]}
+          ],
+          "unknown_values": ["-", "—", "--", "N/A", "n/a"],
+          "fallback": "UNKNOWN"
+        },
+        "number": {
+          "parser": "number",
+          "patterns": [
+            {"regex": "Invoice\\s*number[:\\s]+([A-Z0-9\\-]+)", "group": 1, "flags": ["IGNORECASE"]}
+          ],
+          "require_digit": true,
+          "fallback_to_filename": true,
+          "filename_pattern": "^\\d+$"
+        },
+        "date": {
+          "parser": "date",
+          "parse_formats": ["%d %B %Y", "%d %b %Y", "%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y"],
+          "nearby_line_window": 2,
+          "details_block": {
+            "enabled": true,
+            "header": "Details",
+            "dot_separator_regex": "^\\.{5,}$",
+            "label_regex": "Invoice\\s*number|Invoice\\s*date|Payment\\s*terms|Billing\\s*ID|Account\\s*ID",
+            "max_label_length": 80
+          }
+        },
+        "currency": {
+          "parser": "currency",
+          "primary_regex": "Total\\s*amount\\s*due\\s*in\\s*([A-Z]{3})",
+          "symbol_map": {"HK$": "HKD", "US$": "USD", "€": "EUR", "£": "GBP", "¥": "JPY"}
+        },
+        "total": {
+          "parser": "total",
+          "primary_regex": "",
+          "primary_regexes": [
+            "Total\\s*amount\\s*due(?:\\s*in\\s*[A-Z]{3})?[:\\s]*([A-Z$€£¥]*)\\s*(-?[\\d,]+\\.\\d{2})",
+            "Total\\s+in\\s+[A-Z]{3}[:\\s]*(-?)([A-Z$€£¥]*)\\s*(-?[\\d,]+\\.\\d{2})"
+          ],
+          "fallback_regex": "(-?)(?:HK\\$|US\\$|\\$|€|£|¥)\\s*(-?[\\d,]+\\.\\d{2})",
+          "pick_max": true
+        }
+      },
+      "filename_template": "{account}_{number}_Invoice_{date}.pdf",
+      "placeholders": {
+        "account": {"sanitize": true, "fallback": "UNKNOWN"},
+        "number": {"sanitize": true, "fallback": "unknown"},
+        "date": {"fallback": "unknown-date"},
+        "total": {"fallback": "unknown"},
+        "currency": {"fallback": "unknown"}
+      },
+      "manual_review_for_missing": ["account", "date"],
+      "report_columns": {
+        "account": "Client Ref.",
+        "date": "PDF Invoice Date",
+        "number": "PDF Invoice No.",
+        "currency": "Topped Currency",
+        "total": "Topped amount"
+      }
+    }
+  }
+}
+```
+
+Per-document-type sections:
+
+- `classifier`: regex patterns used to decide whether a PDF belongs to this document type.
+- `fields`: parser configuration for each field. The `parser` key selects the strategy (`account`, `number`, `date`, `currency`, `total`, or custom). Other keys are passed through to that parser.
 - `filename_template`: output filename pattern; supports `{account}`, `{number}`, `{date}`, `{total}`, `{currency}`.
-- `date_format`: Python `strftime` format used for the `{date}` part of the output filename.
-- `archive_folder`: folder to copy original PDFs into when archiving is enabled.
-- `log_file`: path to JSON log file.
+- `placeholders`: fallback values and sanitisation flags used when building the filename.
+- `manual_review_for_missing`: fields that must be present; missing any triggers the manual-review prefix.
+- `report_columns`: maps fields to fixed CSV/Google Sheets column headers.
+
+### Total parser
+
+The total parser first looks for a `Total amount due in <CURRENCY>` or `Total in <CURRENCY>` header and returns the **last amount** in the following block. This handles Google invoice PDFs where column layout reorders lines during text extraction, including credit notes with negative totals. If no header block is found, it falls back to the configured regexes.
 
 ### Feature flags
 
@@ -126,7 +166,6 @@ Docling consistently hit `std::bad_alloc` errors during layout preprocessing on 
 |---|---|---|
 | `archive` | `true` | Copy the original PDF to the archive folder before renaming. |
 | `skip_already_processed` | `true` | Skip files matching the processed filename patterns. |
-| `manual_review_for_missing` | `["account", "date"]` | Fields that must be present; missing any triggers the manual-review prefix. |
 | `number_fallback_to_filename` | `true` | Use the original filename as the invoice number when not found in the PDF text. |
 | `deduplicate_within_run` | `true` | Append `_1`, `_2`, etc. when the same target name is generated twice in one run. |
 | `dry_run` | `false` | When `true`, log intended actions without modifying files or creating directories. |
@@ -197,14 +236,4 @@ python -m pytest -v
 
 - Successfully parsed files are renamed in the source folder.
 - The **original** PDF is copied to `archive/` before renaming (when `features.archive` is `true`).
-- Files missing any configured required fields are renamed to `000_\u003coriginal\u003e.pdf` for manual review.
-- Check `parse_and_rename.log` for detailed JSON events.
-
-## Notes
-
-- Already-renamed files and `000_` files are skipped on subsequent runs (when `features.skip_already_processed` is `true`).
-- The script does not delete originals; it copies them to the archive folder before renaming.
-- The date parser specifically handles Google's invoice layout where values appear above the `Details` header and labels appear below it.
-- Parser regexes, date formats, and the currency symbol map can be customized in `local_config.json` without changing code.
-- Google Sheets reporting is configured in `local_config.json` under `google_sheets`. See the main project documentation for setup.
-
+- Files missing any configured required fields are renamed to `000_<original>.pdf` for manual review.

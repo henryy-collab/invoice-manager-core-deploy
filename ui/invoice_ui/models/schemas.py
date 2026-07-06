@@ -39,6 +39,7 @@ class ParseResultItem(BaseModel):
     target_name: str
     needs_manual_review: bool
     number_fallback_used: bool
+    document_type: str = "googleadsinvoice"
 
 
 class ParseResponse(BaseModel):
