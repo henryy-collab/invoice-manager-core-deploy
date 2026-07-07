@@ -89,4 +89,4 @@ Top priorities:
 
 - `docs/AGENTS.md` references this file under "Quick reference".
 - When any item above is fixed, update `CHANGELOG.md` and any affected setup guide.
-- `project/docs/MACOS_SETUP.md` has been deprecated; consider removing it entirely once the rclone/service-account setup is proven stable.
+- `project/docs/archive/MACOS_SETUP.md` has been deprecated; consider removing it entirely once the rclone/service-account setup is proven stable.

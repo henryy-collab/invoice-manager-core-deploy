@@ -136,8 +136,10 @@ When implementing anything new, follow this approach:
 - Local parser README: `local/README.md`
 - Core changelog: `docs/CHANGELOG.md`
 - Service account setup: `docs/SERVICE_ACCOUNT_SETUP.md`
+- Deployment guide: `docs/DEPLOYMENT.md`
 - Document types roadmap and architecture: `project/extendingfunctionality/`
-- Archived reference docs: `project/docs/` (including `AGENTS.md`, `CHEATSHEET.md`, `LINUX_SHARED_SETUP.md`, `MACOS_SETUP.md`, `TECH_DEBT.md`)
+- Active development docs: `project/docs/AGENTS.md`, `project/docs/CHEATSHEET.md`, `project/docs/TECH_DEBT.md`
+- Archived reference docs: `project/docs/archive/` (including `LINUX_SHARED_SETUP.md` and `MACOS_SETUP.md`)
 - Archived legacy README: `project/README-legacy.md`
 - Archived scripts: `project/scripts/`
 - Archived systemd unit: `project/systemd/`

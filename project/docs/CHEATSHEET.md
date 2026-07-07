@@ -2,7 +2,7 @@
 
 A quick reference for developing, running, and deploying the self-contained `invoice-manager-core` project.
 
-This file is archived under `project/docs/`. Prefer the core README and `project/docs/AGENTS.md` for the most current instructions.
+This file is under `project/docs/` as an active development reference. Prefer the core README and `project/docs/AGENTS.md` for the most current instructions.
 
 ---
 
