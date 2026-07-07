@@ -1,24 +1,23 @@
 # Deployment Guide for Coolify Cloud
 
-This guide explains how to deploy Invoice Manager Core to Coolify Cloud using a pre-built Docker image from GitHub Container Registry (GHCR).
+## Goal
 
-After the initial setup, every new release you tag in GitHub will automatically redeploy in Coolify.
+Deploy Invoice Manager Core to Coolify Cloud using the pre-built Docker image from GitHub Container Registry (GHCR). After setup, every new release tag pushed to GitHub will automatically redeploy in Coolify.
 
----
+## Prerequisites
 
-## What you need before starting
+Confirm all of the following are available before starting:
 
-- Access to the Coolify Cloud server.
-- The service-account JSON key file (`connect-ai-pc-fad7ca673e19.json`).
-- The `local/local_config.json` file with the correct settings.
-- The `rclone.conf` file containing the `[mydrive-service]` remote.
-
----
+- Access to a Coolify Cloud server.
+- A GitHub account with access to `henryy-collab/invoice-manager-core`.
+- The service-account JSON key file named `connect-ai-pc-fad7ca673e19.json`.
+- The app configuration file `local/local_config.json` with the current production settings.
+- The rclone configuration file `rclone.conf` containing a remote named `[mydrive-service]`.
 
 ## How releases work
 
-1. The developer merges changes to the `master` branch.
-2. The developer creates a Git tag, for example `v0.1.1`.
+1. The maintainer merges changes into the `master` branch.
+2. The maintainer creates and pushes a Git tag, for example `v0.1.1`.
 3. GitHub Actions builds a Docker image and pushes it to GHCR with two tags:
    - `ghcr.io/henryy-collab/invoice-manager-core:0.1.1`
    - `ghcr.io/henryy-collab/invoice-manager-core:latest`
@@ -26,51 +25,54 @@ After the initial setup, every new release you tag in GitHub will automatically 
 
 To roll back, change the image tag in Coolify from `latest` to a specific version such as `0.1.0`.
 
----
-
 ## Step 1: Create a GitHub personal access token
 
-Coolify needs read access to the GHCR image.
+Coolify needs a token to read the GHCR image.
 
-1. Go to https://github.com/settings/tokens.
+1. Open https://github.com/settings/tokens.
 2. Click **Generate new token (classic)**.
 3. Select the `read:packages` scope.
-4. Generate and copy the token.
+4. Generate the token and copy the value.
+5. Store the token securely. It will be pasted into Coolify in the next step.
 
-> Keep this token safe. You will paste it into Coolify.
+Expected result: a token string beginning with `ghp_` is saved in a password manager or secure note.
 
----
+## Step 2: Add the GHCR registry to Coolify Cloud
 
-## Step 2: Add the registry in Coolify Cloud
-
-1. Open Coolify Cloud and go to **Settings → Registries**.
+1. Open Coolify Cloud and navigate to **Settings → Registries**.
 2. Click **Add Registry**.
 3. Choose **GitHub Container Registry (GHCR)**.
-4. Fill in:
+4. Enter the following values:
    - **Username:** your GitHub username
    - **Password:** the personal access token from Step 1
-5. Save.
+5. Save the registry.
 
----
+Expected result: the registry appears in the list with a status of **Connected** or similar.
 
-## Step 3: Create the resource
+## Step 3: Create the Coolify resource
 
 1. In Coolify, click **Create New Resource**.
 2. Choose **Docker Image**.
-3. Select the GHCR registry you just added.
-4. Enter the image:
+3. Select the GHCR registry added in Step 2.
+4. Enter the image URL:
    ```
    ghcr.io/henryy-collab/invoice-manager-core:latest
    ```
 5. Click **Continue**.
 
----
+Expected result: Coolify creates a new resource with the image configured.
 
 ## Step 4: Configure secrets
 
-The container needs three files to function. You can provide them either as file mounts or as base64-encoded environment variables.
+The container requires three files to function:
 
-### Option A: File mounts (preferred)
+1. `/app/local/local_config.json` — app configuration
+2. `/app/keys/connect-ai-pc-fad7ca673e19.json` — Google service-account key
+3. `/root/.config/rclone/rclone.conf` — rclone remote configuration
+
+Choose one method and follow it completely. Do not mix both methods.
+
+### Method A: File mounts (preferred)
 
 1. In the resource settings, go to **Storage / Volumes**.
 2. Add three file mounts:
@@ -78,7 +80,7 @@ The container needs three files to function. You can provide them either as file
    | Container path | Content |
    |---|---|
    | `/app/local/local_config.json` | Paste the full contents of `local/local_config.json` |
-   | `/app/keys/connect-ai-pc-fad7ca673e19.json` | Paste the full contents of the service-account key |
+   | `/app/keys/connect-ai-pc-fad7ca673e19.json` | Paste the full contents of `connect-ai-pc-fad7ca673e19.json` |
    | `/root/.config/rclone/rclone.conf` | Paste the full contents of `rclone.conf` |
 
 3. Add one persistent volume for runtime data:
@@ -87,90 +89,86 @@ The container needs three files to function. You can provide them either as file
    |---|---|
    | `/app/local/data` | Persistent volume |
 
-### Option B: Base64 environment variables
+Expected result: the resource has three file mounts and one persistent volume listed.
 
-If file mounts are not available, use the container's entrypoint to materialize the files from environment variables.
+### Method B: Base64 environment variables
 
-On your local machine, encode each file:
+Use this method only if file mounts are not available.
 
-```bash
-base64 -i local/local_config.json
-base64 -i keys/connect-ai-pc-fad7ca673e19.json
-base64 -i rclone.conf
-```
+1. On a local machine, encode each file as base64:
 
-In Coolify, add these environment variables:
+   ```bash
+   base64 -i local/local_config.json
+   base64 -i keys/connect-ai-pc-fad7ca673e19.json
+   base64 -i rclone.conf
+   ```
 
-| Name | Value |
-|---|---|
-| `APP_CONFIG_JSON_B64` | base64-encoded `local/local_config.json` |
-| `SERVICE_ACCOUNT_JSON_B64` | base64-encoded service-account key |
-| `RCLONE_CONF_B64` | base64-encoded `rclone.conf` |
+2. In Coolify, add these environment variables:
 
-Also add a persistent volume:
+   | Name | Value |
+   |---|---|
+   | `APP_CONFIG_JSON_B64` | base64-encoded contents of `local/local_config.json` |
+   | `SERVICE_ACCOUNT_JSON_B64` | base64-encoded contents of `connect-ai-pc-fad7ca673e19.json` |
+   | `RCLONE_CONF_B64` | base64-encoded contents of `rclone.conf` |
 
-| Container path | Type |
-|---|---|
-| `/app/local/data` | Persistent volume |
+3. Add one persistent volume for runtime data:
 
----
+   | Container path | Type |
+   |---|---|
+   | `/app/local/data` | Persistent volume |
 
-## Step 5: Networking and health checks
+Expected result: the resource has three environment variables and one persistent volume listed.
 
-1. Go to **Domains** and set the domain you want to use.
+## Step 5: Configure networking and health checks
+
+1. Go to **Domains** and set the domain for the application.
 2. Go to **Healthcheck**.
 3. Set the health-check URL to:
    ```
    /health
    ```
-4. Leave the default port as `8000`.
+4. Leave the port as `8000`.
 
----
+Expected result: the domain is saved and the health-check path is `/health` on port `8000`.
 
 ## Step 6: Enable auto-deploy
 
-1. In the resource settings, find **Auto Deploy** or **Webhooks**.
+1. In the resource settings, locate **Auto Deploy** or **Webhooks**.
 2. Enable auto-deploy for the image.
 
-> Coolify will poll or receive a webhook when a new `latest` image is published.
+Expected result: auto-deploy is enabled and Coolify will pull new `latest` images when they are published.
 
----
-
-## Step 7: Deploy
+## Step 7: Deploy and verify
 
 1. Click **Deploy** or **Start**.
-2. Watch the deployment logs.
-3. Open the domain in a browser to verify the UI loads.
+2. Wait for the deployment to finish.
+3. Visit `https://<your-domain>/health` in a browser.
 
----
+Expected result: the browser returns JSON:
+```json
+{"status": "ok"}
+```
 
-## Troubleshooting
+## Common failures
 
 ### Container fails to start
 
-Check the deployment logs for:
+Check the deployment logs for one of these warnings:
 
 - `WARNING: No app config mounted or provided via APP_CONFIG_JSON_B64` — the config file is missing.
 - `WARNING: No rclone config mounted` — the rclone remote is missing.
 - `WARNING: No service-account key mounted` — the Google key is missing.
 
-### rclone commands fail
-
-1. Verify `/root/.config/rclone/rclone.conf` contains `[mydrive-service]`.
-2. Verify the service account has access to the Shared drive.
-3. Run `rclone lsd mydrive-service:` from inside a shell in the running container.
-
 ### Health check fails
 
-Make sure the health-check path is `/health` and the port is `8000`.
+- Confirm the health-check URL is `/health` and the port is `8000`.
+- Confirm the container has finished starting and is not in a crash loop.
 
 ### Coolify does not redeploy on new releases
 
 1. Confirm auto-deploy is enabled.
-2. Check that Coolify is using the `latest` tag, not a pinned version.
-3. Check the Coolify deployment logs for pull errors or registry authentication failures.
-
----
+2. Confirm the image tag is `latest`, not a pinned version.
+3. Check the deployment logs for registry authentication errors.
 
 ## Rollback
 
@@ -186,9 +184,7 @@ To roll back to a previous version:
    ```
 2. Redeploy.
 
----
-
-## For developers: tagging a release
+## For the maintainer: tagging a release
 
 When the code is ready to deploy:
 
