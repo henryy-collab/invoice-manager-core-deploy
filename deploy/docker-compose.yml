@@ -1,0 +1,22 @@
+services:
+  invoice-manager:
+    build: ..
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../local/local_config.json:/app/local/local_config.json:ro
+      - ../keys/connect-ai-pc-fad7ca673e19.json:/app/keys/connect-ai-pc-fad7ca673e19.json:ro
+      - ../rclone.conf:/root/.config/rclone/rclone.conf:ro
+      - app-data:/app/local/data
+    environment:
+      - PYTHONPATH=/app/local:/app/ui
+      - RCLONE_CONFIG=/root/.config/rclone/rclone.conf
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  app-data:

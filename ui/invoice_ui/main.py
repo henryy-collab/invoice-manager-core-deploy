@@ -44,6 +44,10 @@ def create_app() -> FastAPI:
             return FileResponse(index)
         return {"message": "Invoice Parser UI static files not found."}
 
+    @app.get("/health")
+    async def health():
+        return {"status": "ok"}
+
     @app.get("/files/{folder}/{filename}")
     async def download_file(folder: str, filename: str, request: Request):
         from invoice_ui.dependencies import get_app_config
