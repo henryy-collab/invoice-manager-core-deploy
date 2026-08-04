@@ -1,0 +1,13 @@
+services:
+  invoice-manager:
+    build: .
+    environment:
+      - SERVICE_ACCOUNT_JSON=${SERVICE_ACCOUNT_JSON}
+      - APP_CONFIG_JSON=${APP_CONFIG_JSON}
+      - RCLONE_CONF=${RCLONE_CONF}
+    volumes:
+      - app-data:/app/local/data
+    restart: unless-stopped
+
+volumes:
+  app-data:
