@@ -34,16 +34,38 @@ class SyncService:
                 check=False,
                 timeout=300,
             )
+            success = result.returncode == 0
+            summary = None
+            if not success:
+                summary = self._summarize_rclone_error(result.stderr)
             return {
-                "success": result.returncode == 0,
+                "success": success,
                 "returncode": result.returncode,
                 "stdout": result.stdout,
                 "stderr": result.stderr,
+                "error": summary,
             }
         except subprocess.TimeoutExpired:
             return {"success": False, "error": "rclone command timed out"}
         except Exception as exc:
             return {"success": False, "error": str(exc)}
+
+    def _summarize_rclone_error(self, stderr: str) -> str:
+        if not stderr:
+            return "rclone failed with no error output"
+        first_line = stderr.strip().splitlines()[0]
+        lower = stderr.lower()
+        if "directory not found" in lower or "couldn't find directory" in lower:
+            return f"Drive folder not found or not accessible: {first_line}"
+        if "not found" in lower:
+            return f"Remote not found or folder missing: {first_line}"
+        if "permission denied" in lower or "access denied" in lower:
+            return f"Permission denied by remote: {first_line}"
+        if "auth" in lower:
+            return f"Authentication failed for remote: {first_line}"
+        if "timeout" in lower or "deadline exceeded" in lower:
+            return f"rclone timed out: {first_line}"
+        return first_line
 
     def _state_dir(self) -> Path:
         return Path(self.config.output_folder).parent / "state"
@@ -212,9 +234,12 @@ class SyncService:
     def push_archive(self) -> dict:
         if not self.config.rclone.enabled:
             return {"success": False, "error": "rclone sync is disabled in config"}
-        remote_path = self._remote_path(self.config.rclone.archive_drive_folder)
+        archive_folder = self.config.rclone.archive_drive_folder
+        if archive_folder is None or archive_folder == "":
+            return {"success": True, "message": "Archive disabled: archive_drive_folder is not set"}
+        remote_path = self._remote_path(archive_folder)
         if remote_path is None:
-            return {"success": False, "error": "archive_drive_folder is not configured"}
+            return {"success": True, "message": "Archive disabled: archive_drive_folder is not set"}
         local_path = str(Path(self.config.archive_folder))
         pdf_files = sorted(Path(local_path).glob("*.pdf"))
         if not pdf_files:

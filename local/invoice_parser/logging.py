@@ -30,6 +30,7 @@ def setup_logging(log_path: Path) -> logging.Logger:
     console.setFormatter(formatter)
     logger.addHandler(console)
 
+    log_path.parent.mkdir(parents=True, exist_ok=True)
     file_handler = logging.FileHandler(log_path, encoding="utf-8")
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)

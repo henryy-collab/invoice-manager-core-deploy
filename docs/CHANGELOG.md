@@ -2,6 +2,17 @@
 
 A record of merged features and notable changes for Invoice Manager Core.
 
+## 2026-08-04 — Defensive deployment and runtime fixes
+
+- **`deploy/entrypoint.sh`**: now supports plain env vars (`SERVICE_ACCOUNT_JSON`, `APP_CONFIG_JSON`, `RCLONE_CONF`) in addition to base64 env vars and file mounts, so existing Coolify env vars work without changes.
+- **`deploy/repair_config.py`**: added startup config repair that restores parser patterns from `local/local_config.example.json` while preserving environment-specific settings (Drive paths, spreadsheet URL, timezone, etc.).
+- **`local/invoice_parser/logging.py`**: creates the log directory before opening the log file, preventing startup crashes when the directory is missing.
+- **`ui/web_ui.py`**: creates all configured directories on startup (`input_folder`, `output_folder`, `archive_folder`, and the log directory).
+- **`ui/invoice_ui/services/sync_service.py`**: an empty or missing `archive_drive_folder` is now treated as disabled, preventing accidental archives to the Google Drive root.
+- **Better rclone diagnostics**: `sync_service.py` now summarizes common rclone failures (missing folder, permission denied, auth failure, timeout) into a single readable message.
+- **Tests**: added `local/tests/test_logging.py`, `ui/tests/test_web_ui.py`, and `ui/tests/test_sync_service.py` to cover the new defensive behavior.
+- **Docker layout**: root `docker-compose.yml` is now the Coolify env-var compose; local file-mount development uses `deploy/docker-compose.local.yml`.
+
 ## 2026-07-03 — Document types architecture and config-driven parsing
 
 - **Document types registry**: `local/local_config.json` now has a top-level `document_types` section. Each type owns its own classifier, field parsers, filename template, placeholders, manual-review fields, and report column mappings.

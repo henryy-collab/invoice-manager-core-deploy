@@ -12,7 +12,7 @@ def get_ui_config() -> UIConfig:
     return UIConfig.from_env()
 
 
-def _resolve_config_path(request: Request) -> Path:
+def resolve_default_config_path() -> Path:
     import os
 
     ui_config = get_ui_config()
@@ -33,16 +33,19 @@ def _resolve_config_path(request: Request) -> Path:
     )
 
 
+def _resolve_config_path(request: Request) -> Path:
+    return resolve_default_config_path()
+
+
 def get_config_path(request: Request) -> Path:
     return _resolve_config_path(request)
 
 
-def get_app_config(request: Request) -> AppConfig:
+def load_app_config_from_path(config_path: Path) -> AppConfig:
     import json
 
     from pydantic import ValidationError
 
-    config_path = get_config_path(request)
     try:
         raw = json.loads(config_path.read_text(encoding="utf-8"))
         config = AppConfig.model_validate(raw)
@@ -51,6 +54,10 @@ def get_app_config(request: Request) -> AppConfig:
         raise ValueError(f"Invalid JSON in {config_path}: {exc}")
     except ValidationError as exc:
         raise ValueError(f"Config validation failed: {exc}")
+
+
+def get_app_config(request: Request) -> AppConfig:
+    return load_app_config_from_path(get_config_path(request))
 
 
 def get_logger(request: Request):

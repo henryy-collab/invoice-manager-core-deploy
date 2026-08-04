@@ -1,198 +1,118 @@
-# Deployment Guide for Coolify Cloud
+# Deployment Guide for Coolify
 
 ## Goal
 
-Deploy Invoice Manager Core to Coolify Cloud using the pre-built Docker image from GitHub Container Registry (GHCR). After setup, every new release tag pushed to GitHub will automatically redeploy in Coolify.
+Deploy Invoice Manager Core to Coolify using Docker Compose from the GitHub repository. After setup, every new Git tag can be selected in Coolify for a controlled version update.
 
 ## Prerequisites
 
-Confirm all of the following are available before starting:
-
-- Access to a Coolify Cloud server.
-- A GitHub account with access to `henryy-collab/invoice-manager-core`.
+- Access to a Coolify server.
+- A GitHub repository the Coolify app can read (for example, `FirstPage-Glass/invoice-manager-core`).
 - The service-account JSON key file named `connect-ai-pc-fad7ca673e19.json`.
 - The app configuration file `local/local_config.json` with the current production settings.
 - The rclone configuration file `rclone.conf` containing a remote named `[mydrive-service]`.
 
 ## How releases work
 
-1. The maintainer merges changes into the `master` branch.
-2. The maintainer creates and pushes a Git tag, for example `v0.1.1`.
-3. GitHub Actions builds a Docker image and pushes it to GHCR with two tags:
-   - `ghcr.io/henryy-collab/invoice-manager-core:0.1.1`
-   - `ghcr.io/henryy-collab/invoice-manager-core:latest`
-4. Coolify Cloud detects the new `latest` image and redeploys automatically.
+1. Changes are merged into `master` on the source-of-truth repo.
+2. A maintainer pushes a Git tag, for example `v0.1.0`.
+3. In Coolify, the resource source is changed from `master` to the tag `v0.1.0` and the resource is redeployed.
+4. Coolify pulls the repository at that tag, builds the Docker image, and starts the container.
 
-To roll back, change the image tag in Coolify from `latest` to a specific version such as `0.1.0`.
+This gives full control over when each version is deployed.
 
-## Step 1: Create a GitHub personal access token
+## Step 1: Provide the secrets as environment variables
 
-Coolify needs a token to read the GHCR image.
+The container reads three files from environment variables because Coolify already has them configured for the existing resource.
 
-1. Open https://github.com/settings/tokens.
-2. Click **Generate new token (classic)**.
-3. Select the `read:packages` scope.
-4. Generate the token and copy the value.
-5. Store the token securely. It will be pasted into Coolify in the next step.
+| Variable | Value |
+|---|---|
+| `SERVICE_ACCOUNT_JSON` | The full contents of `connect-ai-pc-fad7ca673e19.json` (base64-encoded by the existing entrypoint) |
+| `APP_CONFIG_JSON` | The full contents of `local/local_config.json` as plain JSON |
+| `RCLONE_CONF` | The full contents of `rclone.conf` with newlines replaced by `\|` pipe characters |
 
-Expected result: a token string beginning with `ghp_` is saved in a password manager or secure note.
+The `RCLONE_CONF` pipe format is used because multi-line values are hard to paste into some Coolify environments. For example:
 
-## Step 2: Add the GHCR registry to Coolify Cloud
+```
+[mydrive-service]\ntype = drive\nscope = drive\nservice_account_file = /app/keys/connect-ai-pc-fad7ca673e19.json
+```
 
-1. Open Coolify Cloud and navigate to **Settings → Registries**.
-2. Click **Add Registry**.
-3. Choose **GitHub Container Registry (GHCR)**.
-4. Enter the following values:
-   - **Username:** your GitHub username
-   - **Password:** the personal access token from Step 1
-5. Save the registry.
+Do not change these variables if the existing deployment already works.
 
-Expected result: the registry appears in the list with a status of **Connected** or similar.
+## Step 2: Ensure the Coolify resource is configured
 
-## Step 3: Create the Coolify resource
+1. In Coolify, open the existing invoice-manager resource.
+2. Confirm the source is a Docker Compose repository.
+3. Confirm the source repository is the one Coolify can read (e.g., `FirstPage-Glass/invoice-manager-core`).
+4. Confirm the branch is `master` for now.
 
-1. In Coolify, click **Create New Resource**.
-2. Choose **Docker Image**.
-3. Select the GHCR registry added in Step 2.
-4. Enter the image URL:
-   ```
-   ghcr.io/henryy-collab/invoice-manager-core:latest
-   ```
-5. Click **Continue**.
+## Step 3: Configure networking and health checks
 
-Expected result: Coolify creates a new resource with the image configured.
+1. Set the port to `8000`.
+2. Set the health-check URL to `/health`.
+3. Add a domain if you want a public URL.
 
-## Step 4: Configure secrets
+## Step 4: Add persistent storage
 
-The container requires three files to function:
+Add one persistent volume:
 
-1. `/app/local/local_config.json` — app configuration
-2. `/app/keys/connect-ai-pc-fad7ca673e19.json` — Google service-account key
-3. `/root/.config/rclone/rclone.conf` — rclone remote configuration
+| Container path | Type |
+|---|---|
+| `/app/local/data` | Persistent volume |
 
-Choose one method and follow it completely. Do not mix both methods.
+This keeps incoming PDFs, outgoing PDFs, logs, reports, and state across redeploys.
 
-### Method A: File mounts (preferred)
-
-1. In the resource settings, go to **Storage / Volumes**.
-2. Add three file mounts:
-
-   | Container path | Content |
-   |---|---|
-   | `/app/local/local_config.json` | Paste the full contents of `local/local_config.json` |
-   | `/app/keys/connect-ai-pc-fad7ca673e19.json` | Paste the full contents of `connect-ai-pc-fad7ca673e19.json` |
-   | `/root/.config/rclone/rclone.conf` | Paste the full contents of `rclone.conf` |
-
-3. Add one persistent volume for runtime data:
-
-   | Container path | Type |
-   |---|---|
-   | `/app/local/data` | Persistent volume |
-
-Expected result: the resource has three file mounts and one persistent volume listed.
-
-### Method B: Base64 environment variables
-
-Use this method only if file mounts are not available.
-
-1. On a local machine, encode each file as base64:
-
-   ```bash
-   base64 -i local/local_config.json
-   base64 -i keys/connect-ai-pc-fad7ca673e19.json
-   base64 -i rclone.conf
-   ```
-
-2. In Coolify, add these environment variables:
-
-   | Name | Value |
-   |---|---|
-   | `APP_CONFIG_JSON_B64` | base64-encoded contents of `local/local_config.json` |
-   | `SERVICE_ACCOUNT_JSON_B64` | base64-encoded contents of `connect-ai-pc-fad7ca673e19.json` |
-   | `RCLONE_CONF_B64` | base64-encoded contents of `rclone.conf` |
-
-3. Add one persistent volume for runtime data:
-
-   | Container path | Type |
-   |---|---|
-   | `/app/local/data` | Persistent volume |
-
-Expected result: the resource has three environment variables and one persistent volume listed.
-
-## Step 5: Configure networking and health checks
-
-1. Go to **Domains** and set the domain for the application.
-2. Go to **Healthcheck**.
-3. Set the health-check URL to:
-   ```
-   /health
-   ```
-4. Leave the port as `8000`.
-
-Expected result: the domain is saved and the health-check path is `/health` on port `8000`.
-
-## Step 6: Enable auto-deploy
-
-1. In the resource settings, locate **Auto Deploy** or **Webhooks**.
-2. Enable auto-deploy for the image.
-
-Expected result: auto-deploy is enabled and Coolify will pull new `latest` images when they are published.
-
-## Step 7: Deploy and verify
+## Step 5: Deploy and verify
 
 1. Click **Deploy** or **Start**.
-2. Wait for the deployment to finish.
-3. Visit `https://<your-domain>/health` in a browser.
+2. Watch the deploy logs. You should see:
+   - `App config written from APP_CONFIG_JSON`
+   - `Repairing config from env var...`
+   - `Config repaired successfully.`
+3. Visit the domain or `/health` and confirm the response:
+   ```json
+   {"status": "ok"}
+   ```
+4. Test the preview workflow to confirm invoices parse correctly.
 
-Expected result: the browser returns JSON:
-```json
-{"status": "ok"}
+## Step 6: Roll out a new version
+
+When the code is ready to release:
+
+```bash
+git checkout master
+git pull
+git tag v0.1.0
+git push origin v0.1.0
 ```
+
+Then sync the tag to the deployment repo if it differs from your source-of-truth repo.
+
+In Coolify:
+
+1. Open the resource.
+2. Change the branch/tag from `master` to `v0.1.0`.
+3. Redeploy.
+
+## Rollback
+
+To roll back to a previous version, change the tag in Coolify from the new tag back to the previous tag (e.g., `v0.1.0`) and redeploy.
 
 ## Common failures
 
 ### Container fails to start
 
-Check the deployment logs for one of these warnings:
+Check the deployment logs for these warnings:
 
-- `WARNING: No app config mounted or provided via APP_CONFIG_JSON_B64` — the config file is missing.
-- `WARNING: No rclone config mounted` — the rclone remote is missing.
-- `WARNING: No service-account key mounted` — the Google key is missing.
+- `WARNING: No app config mounted or provided` — `APP_CONFIG_JSON` is missing.
+- `WARNING: No rclone config mounted or provided` — `RCLONE_CONF` is missing.
+- `WARNING: No service-account key mounted or provided` — `SERVICE_ACCOUNT_JSON` is missing.
 
 ### Health check fails
 
-- Confirm the health-check URL is `/health` and the port is `8000`.
-- Confirm the container has finished starting and is not in a crash loop.
+- Confirm the port is `8000` and the path is `/health`.
+- Confirm the container finished starting and is not in a crash loop.
 
-### Coolify does not redeploy on new releases
+### Drive folder not found
 
-1. Confirm auto-deploy is enabled.
-2. Confirm the image tag is `latest`, not a pinned version.
-3. Check the deployment logs for registry authentication errors.
-
-## Rollback
-
-To roll back to a previous version:
-
-1. In Coolify, change the image from:
-   ```
-   ghcr.io/henryy-collab/invoice-manager-core:latest
-   ```
-   to:
-   ```
-   ghcr.io/henryy-collab/invoice-manager-core:0.1.0
-   ```
-2. Redeploy.
-
-## For the maintainer: tagging a release
-
-When the code is ready to deploy:
-
-```bash
-git checkout master
-git pull
-git tag v0.1.1
-git push origin v0.1.1
-```
-
-GitHub Actions will build and publish the new image within a few minutes.
+The rclone error message now says `Drive folder not found or not accessible`. Check the `source_drive_folder` value in the config and confirm the folder still exists in Google Drive.

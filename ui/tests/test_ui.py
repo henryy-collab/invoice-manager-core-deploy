@@ -271,8 +271,22 @@ def test_sync_archive_not_configured(ui_client):
 
     res = ui_client.post("/api/sync/archive")
     assert res.status_code == 200
-    assert res.json()["success"] is False
-    assert "not configured" in res.json()["error"].lower()
+    assert res.json()["success"] is True
+    assert "disabled" in res.json()["message"].lower()
+
+
+def test_sync_archive_empty_string_disabled(ui_client):
+    res = ui_client.get("/api/config")
+    cfg = res.json()["config"]
+    cfg["rclone"]["enabled"] = True
+    cfg["rclone"]["archive_drive_folder"] = ""
+    res = ui_client.post("/api/config", json={"config": cfg})
+    assert res.status_code == 200
+
+    res = ui_client.post("/api/sync/archive")
+    assert res.status_code == 200
+    assert res.json()["success"] is True
+    assert "disabled" in res.json()["message"].lower()
 
 
 def test_sync_clear_input_no_state(ui_client):
