@@ -17,7 +17,7 @@
 - **Archived docs, scripts or service files**: update the “Legacy references warning” and “Quick reference” lists.
 - **Report columns or sheet behavior**: update the Write info to Report bullet in “Current runtime flow”.
 - **This safe-word section or the safe word itself**: keep it current.
-- **Documentation files outside `project/`**: when `README.md`, `local/README.md`, `docs/CHANGELOG.md`, or `docs/SERVICE_ACCOUNT_SETUP.md` are updated, reflect the key points here so this file remains the single source of truth for agents.
+- **Documentation files outside `project/`**: when `README.md`, `local/README.md`, `docs/CHANGELOG.md`, `docs/DEPLOYMENT.md`, or `docs/SERVICE_ACCOUNT_SETUP.md` are updated, reflect the key points here so this file remains the single source of truth for agents.
 
 ## Always keep documentation up to date
 
@@ -25,9 +25,10 @@ Whenever code changes affect behavior, configuration, or the user-facing workflo
 
 1. **`docs/CHANGELOG.md`** — add a dated entry describing the change.
 2. **`local/README.md`** — update config examples, feature descriptions, and usage instructions.
-3. **`README.md`** — update high-level setup, data layout, and notes.
+3. **`README.md`** — update high-level setup, data layout, deployment notes, and notes.
 4. **`docs/SERVICE_ACCOUNT_SETUP.md`** — update if Google Drive/Sheets configuration, paths, or authentication behavior changes.
-5. **`project/docs/AGENTS.md`** — keep this starter current with the latest architecture, config pointers, and conventions.
+5. **`docs/DEPLOYMENT.md`** — update if Coolify setup, environment variables, secrets, or the release workflow change.
+6. **`project/docs/AGENTS.md`** — keep this starter current with the latest architecture, config pointers, and conventions.
 
 Treat documentation as part of the feature, not an afterthought. If a change would confuse someone reading the docs before the code, the docs need updating.
 
@@ -42,6 +43,20 @@ A self-contained system for processing Google invoice PDFs:
 - `local/` — Python PDF parser and renamer (CLI).
 - `ui/` — FastAPI web UI with vanilla JS frontend.
 - `project/` — archived reference docs, scripts, and legacy setup guides carried over from the original repo.
+
+## Deployment and release workflow
+
+- **Source of truth for development:** `https://github.com/henryy-collab/invoice-manager-core`.
+- **Deployment mirror:** `https://github.com/FirstPage-Glass/invoice-manager-core`.
+- Coolify is configured to deploy from the deployment mirror's `master` branch with auto-deploy enabled.
+- To release a new version, sync the source-of-truth `master` to the deployment mirror:
+  ```powershell
+  git checkout master
+  git pull origin master
+  git push glass master
+  ```
+- The deployment mirror should only receive updates when a release is intended.
+- Full instructions are in `docs/DEPLOYMENT.md`.
 
 ## Before doing any work
 1. Ensure the working directory is the repo root:
@@ -159,6 +174,14 @@ Do not follow any path, command, or instruction from `project/` without first ve
 
 See `docs/CHANGELOG.md` for a full history of merged features.
 
+### Deployment workflow
+
+- Development happens in `henryy-collab/invoice-manager-core`.
+- The deployment mirror is `FirstPage-Glass/invoice-manager-core`.
+- Coolify auto-deploys from the deployment mirror `master` branch.
+- To release: sync `master` from the source of truth to the deployment mirror with `git push glass master`.
+- See `docs/DEPLOYMENT.md` for the full procedure.
+
 ### Current runtime flow
 
 1. rclone pulls raw PDFs to `local/data/incoming/` via `mydrive-service`.
@@ -178,6 +201,9 @@ See `docs/CHANGELOG.md` for a full history of merged features.
 - Service-account keys should be written as `keys/<file>.json` (they live next to the `local/` folder at project root).
 - Current Drive paths: `003 Finance Operations/001 Invoices/001 Google Ads/000 Input Folder` and `003 Finance Operations/001 Invoices/001 Google Ads`.
 - Current rclone remote: `mydrive-service`.
+- Source of truth repo: `henryy-collab/invoice-manager-core`.
+- Deployment mirror repo: `FirstPage-Glass/invoice-manager-core`.
+- Coolify auto-deploys from the deployment mirror's `master` branch.
 - Google Sheets reporting is configured under `google_sheets` in `local_config.json`. Enable it and set `spreadsheet_url` to append processed invoice details to monthly tabs based on invoice date. The Google Sheets API must be enabled in the same Cloud project.
 - Document types are configured under `document_types`; the default type is `googleadsinvoice`.
 
@@ -194,5 +220,5 @@ See `docs/CHANGELOG.md` for a full history of merged features.
 - When adding new Process workflow actions, follow the existing pattern: backend method in `ui/invoice_ui/services/`, endpoint in `ui/invoice_ui/routers/`, API wrapper in `ui/static/js/core/api.js`, and UI handler in `ui/static/js/features/local/workflow.js`.
 - Google Sheets report writes follow the same workflow pattern and live in `ui/invoice_ui/services/sheets_service.py` and `ui/invoice_ui/routers/sheets_router.py`.
 - When changing the frontend, bump the cache-busting query string on the affected assets in `ui/static/index.html` (e.g. `?v=4`) so returning browsers load the new code.
-- **Update documentation**: when adding a new feature, update `docs/CHANGELOG.md`, `docs/SERVICE_ACCOUNT_SETUP.md`, `local/README.md`, and `README.md` as applicable. Only update archived docs under `project/` if they are still relevant to the current core app, and keep `project/docs/AGENTS.md` up to date when the archive changes.
+- **Update documentation**: when adding a new feature, update `docs/CHANGELOG.md`, `docs/DEPLOYMENT.md`, `docs/SERVICE_ACCOUNT_SETUP.md`, `local/README.md`, and `README.md` as applicable. Only update archived docs under `project/` if they are still relevant to the current core app, and keep `project/docs/AGENTS.md` up to date when the archive changes.
 - **Keep this AGENTS.md file current** whenever docs, config behavior, workflow steps, or architecture change. SAFEWORD

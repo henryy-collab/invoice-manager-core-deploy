@@ -62,6 +62,17 @@ python -m pytest
 
 To push processed files to a Google Shared drive, configure a service account and rclone. See `docs/SERVICE_ACCOUNT_SETUP.md`.
 
+## Deployment
+
+For Coolify deployment instructions, see `docs/DEPLOYMENT.md`.
+
+Release workflow:
+
+- Source of truth: `henryy-collab/invoice-manager-core`.
+- Deployment mirror: `FirstPage-Glass/invoice-manager-core`.
+- Coolify auto-deploys from the deployment mirror's `master` branch.
+- To release: `git checkout master && git pull && git push glass master`.
+
 ## Data layout
 
 `local/data/` is created automatically on startup:

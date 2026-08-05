@@ -2,6 +2,14 @@
 
 A record of merged features and notable changes for Invoice Manager Core.
 
+## 2026-08-05 — Documented release workflow
+
+- Source of truth for development: `henryy-collab/invoice-manager-core`.
+- Deployment mirror: `FirstPage-Glass/invoice-manager-core`.
+- Coolify watches the deployment mirror's `master` branch and auto-deploys when it is synced.
+- Release command: `git push glass master` from the source-of-truth `master`.
+- Updated `docs/DEPLOYMENT.md`, `README.md`, and `project/docs/AGENTS.md` with the workflow.
+
 ## 2026-08-04 — Defensive deployment and runtime fixes
 
 - **`deploy/entrypoint.sh`**: now supports plain env vars (`SERVICE_ACCOUNT_JSON`, `APP_CONFIG_JSON`, `RCLONE_CONF`) in addition to base64 env vars and file mounts, so existing Coolify env vars work without changes.
