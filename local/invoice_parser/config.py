@@ -86,6 +86,26 @@ class AccountParserConfig(BaseModel):
     fallback: str = "UNKNOWN"
 
 
+class AccountsParserConfig(BaseModel):
+    summary_marker_regex: str = r"Summary\s+of\s+costs\s+by\s+account\s+budget"
+    amount_header_regex: str = r"^Amount\s*\(?[A-Z$€£¥]*\)?$"
+    account_line_regex: str = r"Account:\s*(.+?)(?=\s*\[|\s*$)"
+    account_id_line_regex: str = r"Account\s*ID[:\s]+([\d\-]+)"
+    total_label_regex: str = r"(Total\s*amount\s*due\s*in|Total\s+in)\s+[A-Z]{3}"
+    amount_regex: str = r"(-?)(?:HK\$|US\$|\$|€|£|¥|SGD|HKD|USD|AUD|GBP|EUR|JPY)?\s*(-?[\d,]+\.\d{2})"
+    id_lookahead: int = 4
+    name_max_lines: int = 3
+
+    @field_validator("summary_marker_regex", "amount_header_regex", "account_line_regex", "account_id_line_regex", "total_label_regex", "amount_regex")
+    @classmethod
+    def regex_must_compile(cls, v: str) -> str:
+        try:
+            re.compile(v)
+        except re.error as exc:
+            raise ValueError(f"Invalid regex: {exc}")
+        return v
+
+
 class NumberParserConfig(BaseModel):
     patterns: list[RegexPattern] = Field(default_factory=list)
     require_digit: bool = True
@@ -167,6 +187,7 @@ class ParsersConfig(BaseModel):
         unknown_values=["-", "—", "--", "N/A", "n/a"],
         fallback="UNKNOWN",
     ))
+    accounts: AccountsParserConfig = Field(default_factory=AccountsParserConfig)
     number: NumberParserConfig = Field(default_factory=lambda: NumberParserConfig(
         patterns=[
             RegexPattern(regex=r"Invoice\s*number[:\s]+([A-Z0-9\-]+)", flags=["IGNORECASE"]),
@@ -343,7 +364,7 @@ class AppConfig(BaseModel):
         features = self.features
 
         fields = {}
-        for name, parser_name in [("account", "account"), ("account_id", "account_id"), ("number", "number"), ("date", "date"), ("currency", "currency"), ("total", "total")]:
+        for name, parser_name in [("account", "account"), ("account_id", "account_id"), ("accounts", "accounts"), ("number", "number"), ("date", "date"), ("currency", "currency"), ("total", "total")]:
             parser_config = getattr(parsers, name, None)
             field_config = {"parser": parser_name}
             if parser_config is not None:

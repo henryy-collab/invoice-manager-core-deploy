@@ -207,6 +207,7 @@ See `docs/CHANGELOG.md` for a full history of merged features.
 - Google Sheets reporting is configured under `google_sheets` in `local_config.json`. Enable it and set `spreadsheet_url` to append processed invoice details to monthly tabs based on invoice date. The Google Sheets API must be enabled in the same Cloud project.
 - Document types are configured under `document_types`; the default type is `googleadsinvoice`.
 - The parser captures the account **name** (`account`) and the numeric account **ID** (`account_id`) as separate fields. `account_id` is parsed from the bracketed form (`Account: Name [12345]`) or a standalone `Account ID: 12345` line, flows into parse results and `.meta.json` sidecars, and is available as the `{account_id}` filename placeholder. It is not yet mapped into CSV/Google Sheets report columns.
+- A per-account breakdown (`accounts`) is parsed and written to the `.meta.json` sidecar as a JSON array of `{account, account_id, amount}` records. Multi-account invoices (consolidated HKCT) are parsed from the "Summary of costs by account budget" table and aggregated by account ID; single-account invoices produce one record with the invoice total. It is not used in filenames or reports. Configured under `parsers.accounts` / `document_types.*.fields.accounts`.
 
 ### Known quirks
 

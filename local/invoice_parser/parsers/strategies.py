@@ -2,6 +2,7 @@ from typing import Callable, Optional
 
 from invoice_parser.config import AppConfig, FieldConfig
 from invoice_parser.parsers.account import normalize_account, parse_account
+from invoice_parser.parsers.accounts import parse_accounts
 from invoice_parser.parsers.currency import parse_currency
 from invoice_parser.parsers.date import parse_date_field
 from invoice_parser.parsers.number import parse_number
@@ -21,6 +22,12 @@ def _run_account_id(text: str, _filename_stem: str, _date_format: str, field_con
     from invoice_parser.config import AccountParserConfig
     config = AccountParserConfig.model_validate(field_config.model_dump())
     return parse_account(text, config)
+
+
+def _run_accounts(text: str, _filename_stem: str, _date_format: str, field_config: FieldConfig, _config: AppConfig) -> Optional[str]:
+    from invoice_parser.config import AccountsParserConfig
+    config = AccountsParserConfig.model_validate(field_config.model_dump())
+    return parse_accounts(text, config)
 
 
 def _run_number(text: str, filename_stem: str, _date_format: str, field_config: FieldConfig, _config: AppConfig) -> Optional[str]:
@@ -50,6 +57,7 @@ def _run_total(text: str, _filename_stem: str, _date_format: str, field_config: 
 STRATEGIES: dict[str, Strategy] = {
     "account": _run_account,
     "account_id": _run_account_id,
+    "accounts": _run_accounts,
     "number": _run_number,
     "date": _run_date,
     "currency": _run_currency,

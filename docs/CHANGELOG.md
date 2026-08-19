@@ -2,6 +2,15 @@
 
 A record of merged features and notable changes for Invoice Manager Core.
 
+## 2026-08-19 — Per-account breakdown in `.meta.json` sidecar
+
+- **New `accounts` field**: each parsed invoice now includes a per-account breakdown linking each account name to its own account ID and amount.
+- **Multi-account invoices** (e.g. consolidated HKCT invoices with several accounts) are parsed from the "Summary of costs by account budget" table. Account budget rows are aggregated by account ID, so each account appears once with its total (negative amounts, e.g. credit notes, are preserved).
+- **Single-account invoices** produce one record using the account name, account ID, and the invoice total.
+- The `accounts` value is stored as a JSON list inside the `.meta.json` sidecar (e.g. `[{"account":"HKCT - Brand","account_id":"802-155-0535","amount":"804.21"}, ...]`).
+- New `parsers.accounts` (and per-document-type `fields.accounts`) config, exposed in the UI Config tab. It is not mapped into the CSV or Google Sheets report.
+- Validated against all 131 archived real invoices: every invoice yields at least one record, and the sum of account amounts matches the invoice total on every file.
+
 ## 2026-08-19 — Separate account ID field
 
 - **New `account_id` field**: the PDF parser now captures the account ID separately from the account name.

@@ -227,7 +227,7 @@ const configModule = {
     const row = document.createElement("div");
     row.className = "form-row document-type-fields";
 
-    const knownFields = ["account", "account_id", "number", "date", "currency", "total"];
+    const knownFields = ["account", "account_id", "accounts", "number", "date", "currency", "total"];
     knownFields.forEach((fieldName) => {
       const fieldConfig = fields[fieldName] || { parser: fieldName };
       row.appendChild(this._renderFieldCard(typeName, fieldName, fieldConfig));
@@ -245,7 +245,7 @@ const configModule = {
     heading.textContent = fieldName;
     card.appendChild(heading);
 
-    const parserOptions = ["account", "account_id", "number", "date", "currency", "total", "custom"];
+    const parserOptions = ["account", "account_id", "accounts", "number", "date", "currency", "total", "custom"];
     const optionsHtml = parserOptions.map((opt) => {
       const selected = fieldConfig.parser === opt ? "selected" : "";
       return `<option value="${escapeAttr(opt)}" ${selected}>${escapeHtml(opt)}</option>`;

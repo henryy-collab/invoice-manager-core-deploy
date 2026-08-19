@@ -46,6 +46,14 @@ def test_config_account_id_defaults(minimal_config_dict):
     assert "account_id" in type_config.placeholders
 
 
+def test_config_accounts_defaults(minimal_config_dict):
+    config = AppConfig.model_validate(minimal_config_dict)
+    assert config.parsers.accounts is not None
+    assert "Summary" in config.parsers.accounts.summary_marker_regex
+    type_config = config.document_types[config.default_document_type]
+    assert "accounts" in type_config.fields
+
+
 def test_config_accepts_custom_features(minimal_config_dict):
     minimal_config_dict["features"] = {
         "archive": False,

@@ -7,6 +7,7 @@ This Python script reads PDF invoices, extracts key fields using **PyMuPDF**, an
 - Scans a configured source folder for PDFs.
 - Extracts text from each PDF with PyMuPDF (fast, low memory, no external AI models).
 - Classifies each PDF to a configured **document type** and parses account, account ID, invoice number, invoice date, total amount, and currency using per-type regex patterns.
+- Extracts a **per-account breakdown** (`accounts`) linking each account name to its own account ID and amount. Multi-account invoices (e.g. consolidated HKCT invoices) are parsed from the "Summary of costs by account budget" table; single-account invoices produce one record with the invoice total. The breakdown is stored in the `.meta.json` sidecar.
 - Renames files based on a per-document-type filename template.
 - Uses the original filename as the invoice number if the PDF text does not contain it (configurable).
 - Falls back to `000_<original>.pdf` when configured required fields cannot be found, so manual-review files sort to the top.
@@ -98,6 +99,17 @@ Each entry under `document_types` describes how to recognise and parse one kind 
           "unknown_values": ["-", "—", "--", "N/A", "n/a"],
           "fallback": "UNKNOWN"
         },
+        "accounts": {
+          "parser": "accounts",
+          "summary_marker_regex": "Summary\\s+of\\s+costs\\s+by\\s+account\\s+budget",
+          "amount_header_regex": "^Amount\\s*\\(?[A-Z$€£¥]*\\)?$",
+          "account_line_regex": "^Account:\\s*(.+?)(?=\\s*\\[|\\s*$)",
+          "account_id_line_regex": "Account\\s*ID[:\\s]+([\\d\\-]+)",
+          "total_label_regex": "(Total\\s*amount\\s*due\\s*in|Total\\s+in)\\s+[A-Z]{3}",
+          "amount_regex": "(-?)(?:HK\\$|US\\$|\\$|€|£|¥|SGD|HKD|USD|AUD|GBP|EUR|JPY)?\\s*(-?[\\d,]+\\.\\d{2})",
+          "id_lookahead": 4,
+          "name_max_lines": 3
+        },
         "number": {
           "parser": "number",
           "patterns": [
@@ -160,11 +172,12 @@ Each entry under `document_types` describes how to recognise and parse one kind 
 Per-document-type sections:
 
 - `classifier`: regex patterns used to decide whether a PDF belongs to this document type.
-- `fields`: parser configuration for each field. The `parser` key selects the strategy (`account`, `account_id`, `number`, `date`, `currency`, `total`, or custom). Other keys are passed through to that parser.
+- `fields`: parser configuration for each field. The `parser` key selects the strategy (`account`, `account_id`, `accounts`, `number`, `date`, `currency`, `total`, or custom). Other keys are passed through to that parser.
 - `filename_template`: output filename pattern; supports `{account}`, `{account_id}`, `{number}`, `{date}`, `{total}`, `{currency}`.
 - `placeholders`: fallback values and sanitisation flags used when building the filename.
 - `manual_review_for_missing`: fields that must be present; missing any triggers the manual-review prefix.
 - `report_columns`: maps fields to fixed CSV/Google Sheets column headers.
+- `accounts`: a structured breakdown written to the `.meta.json` sidecar only (not used in filenames or reports). It parses the "Summary of costs by account budget" table for multi-account invoices, aggregates budget rows by account ID, and falls back to a single account record with the invoice total when no such table exists.
 
 ### Total parser
 

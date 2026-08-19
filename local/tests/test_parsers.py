@@ -1,4 +1,5 @@
 from invoice_parser.parsers.account import normalize_account, parse_account
+from invoice_parser.parsers.accounts import parse_accounts
 from invoice_parser.parsers.currency import parse_currency
 from invoice_parser.parsers.date import parse_date_field
 from invoice_parser.parsers.invoice import parse_invoice
@@ -178,3 +179,116 @@ Total amount due in HKD: HK$ 9,999.99
     invoice = parse_invoice(text, "5561278890", sample_config)
     assert invoice.account == "Test Client"
     assert invoice.account_id == "12345"
+
+
+def test_parse_accounts_single_account_uses_invoice_total(sample_config):
+    text = """
+Invoice number: 5561278890
+Total amount due in HKD
+HK$18,995.38
+HK$0.00
+HK$18,995.38
+Summary for 1 Apr 2026 - 30 Apr 2026
+Page 2 of 5
+HK$18,995.38
+HK$0.00
+HK$18,995.38
+Subtotal in HKD
+GST (0%)
+Total in HKD
+Account: Intertextile Shanghai [Monthly Invoicing]
+Account ID: 180-983-1993
+Account budget: Monthly Invoicing - 20230620
+"""
+    result = parse_accounts(text, sample_config.parsers.accounts)
+    import json
+    records = json.loads(result)
+    assert records == [{
+        "account": "Intertextile Shanghai",
+        "account_id": "180-983-1993",
+        "amount": "18995.38",
+    }]
+
+
+def test_parse_accounts_multi_account_links_amount_to_id(sample_config):
+    text = """
+Summary of costs by account budget
+1 Apr 2026 - 30 Apr 2026
+Account ID
+Account
+Account budget
+Purchase
+Order
+Amount(HK$)
+802-155-
+0535
+HKCT - Brand [Monthly Invoicing]
+HKCT_HKCT Brand_2026 Apr
+804.21
+751-190-
+9696
+HKCT - CIE [Monthly Invoicing]
+HKCT_CIE_2026 Apr
+18,813.00
+Tax Invoice
+"""
+    result = parse_accounts(text, sample_config.parsers.accounts)
+    import json
+    records = json.loads(result)
+    assert records == [
+        {"account": "HKCT - Brand", "account_id": "802-155-0535", "amount": "804.21"},
+        {"account": "HKCT - CIE", "account_id": "751-190-9696", "amount": "18813.00"},
+    ]
+
+
+def test_parse_accounts_aggregates_budgets_by_account_id(sample_config):
+    text = """
+Summary of costs by account budget
+1 May 2026 - 31 May 2026
+Account ID
+Account
+Account budget
+Purchase Order
+Amount(HK$)
+371-358-
+5594
+FUJIFILM Business Innovation
+[Monthly Invoicing]
+#32148 - Fujifilm BI -
+SEM
+INV34530/INV34530/INV33946
+-12.46
+371-358-
+5594
+FUJIFILM Business Innovation
+[Monthly Invoicing]
+First Page Limited - 20
+May 2026
+-25.50
+Tax Invoice
+"""
+    result = parse_accounts(text, sample_config.parsers.accounts)
+    import json
+    records = json.loads(result)
+    assert records == [{
+        "account": "FUJIFILM Business Innovation",
+        "account_id": "371-358-5594",
+        "amount": "-37.96",
+    }]
+
+
+def test_parse_accounts_credit_note_negative_total(sample_config):
+    text = """
+Total amount due in HKD
+-HK$40.83
+Summary for 16 Apr 2026
+Account: CC16
+Account ID: 951-822-6080
+Account budget: Monthly Invoicing
+"""
+    result = parse_accounts(text, sample_config.parsers.accounts)
+    import json
+    records = json.loads(result)
+    assert records == [
+        {"account": "CC16", "account_id": "951-822-6080", "amount": "-40.83"},
+    ]

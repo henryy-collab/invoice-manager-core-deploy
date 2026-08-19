@@ -39,6 +39,17 @@ def ui_client(tmp_path, monkeypatch):
                         "unknown_values": ["-"],
                         "fallback": "UNKNOWN",
                     },
+                    "accounts": {
+                        "parser": "accounts",
+                        "summary_marker_regex": "Summary\\s+of\\s+costs\\s+by\\s+account\\s+budget",
+                        "amount_header_regex": "^Amount\\s*\\(?[A-Z$€£¥]*\\)?$",
+                        "account_line_regex": "^Account:\\s*(.+?)(?=\\s*\\[|\\s*$)",
+                        "account_id_line_regex": "Account\\s*ID[:\\s]+([\\d\\-]+)",
+                        "total_label_regex": "(Total\\s*amount\\s*due\\s*in|Total\\s+in)\\s+[A-Z]{3}",
+                        "amount_regex": "(-?)(?:HK\\$|US\\$|\\$|€|£|¥|SGD|HKD|USD|AUD|GBP|EUR|JPY)?\\s*(-?[\\d,]+\\.\\d{2})",
+                        "id_lookahead": 4,
+                        "name_max_lines": 3,
+                    },
                     "number": {
                         "parser": "number",
                         "patterns": [{"regex": "Invoice\\s*number[:\\s]+([A-Z0-9\\-]+)", "group": 1, "flags": ["IGNORECASE"]}],
@@ -432,6 +443,63 @@ Total amount due in HKD: HK$ 9,999.99
     fields = data["results"][0]["fields"]
     assert fields["account"] == "Test Client"
     assert fields["account_id"] == "12345"
+
+
+def test_preview_parses_accounts_breakdown(ui_client, tmp_path, monkeypatch):
+    pdf = tmp_path / "data" / "incoming" / "test.pdf"
+    pdf.write_bytes(b"%PDF-1.4 dummy")
+
+    monkeypatch.setattr("invoice_parser.processor.extract_text", lambda _path: """Invoice number: 5565701224
+Invoice date: 30 April 2026
+Total amount due in HKD
+HK$19,617.21
+HK$0.00
+HK$19,617.21
+Summary of costs by account budget
+1 Apr 2026 - 30 Apr 2026
+Account ID
+Account
+Account budget
+Purchase
+Order
+Amount(HK$)
+802-155-
+0535
+HKCT - Brand [Monthly Invoicing]
+HKCT_HKCT Brand_2026 Apr
+804.21
+751-190-
+9696
+HKCT - CIE [Monthly Invoicing]
+HKCT_CIE_2026 Apr
+18,813.00
+Tax Invoice
+Invoice number: 5565701224
+Page 3 of 10
+HK$804.21
+HK$0.00
+HK$804.21
+Subtotal in HKD
+GST (0%)
+Total in HKD
+Account: HKCT - Brand [Monthly Invoicing]
+Account ID: 802-155-0535
+Account budget: HKCT_HKCT Brand_2026 Apr
+""")
+
+    res = ui_client.post("/api/parse/preview")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["processed_count"] == 1
+    fields = data["results"][0]["fields"]
+    assert fields["account"] == "HKCT - Brand"
+    assert fields["account_id"] == "802-155-0535"
+    import json
+    records = json.loads(fields["accounts"])
+    assert records == [
+        {"account": "HKCT - Brand", "account_id": "802-155-0535", "amount": "804.21"},
+        {"account": "HKCT - CIE", "account_id": "751-190-9696", "amount": "18813.00"},
+    ]
 
 
 def test_download_csv_uses_alternate_report_columns(ui_client, tmp_path, monkeypatch):
