@@ -5,6 +5,8 @@ A record of merged features and notable changes for Invoice Manager Core.
 ## 2026-08-19 — Account-keyed data endpoint and normalized account IDs
 
 - **`GET /api/accounts`** (new, separate from the parse/report flow): returns a JSON array of extracted fields keyed by `account_id` as the unique identifier.
+  - **Scoped to the latest run by default**: reads `state/last_run_processed.json` (the `processed` list) and parses only that run's archived PDFs, so it reflects the most recent monthly run instead of repeating prior months. `processed` files only; manual-review files are excluded.
+  - `GET /api/accounts?scope=all` opts back into scanning the whole archive folder.
   - Reads the archived processed PDFs (`local/data/archive/`, where every run accumulates) by default; an optional `?folder=` query parameter can point elsewhere.
   - Records are aggregated by `account_id`: `{account_id, account, amount, invoice_count, invoices:[{number, date, currency, amount}]}`.
   - `date` is normalized to ISO (`2026-06-30`); amounts are summed per account and formatted as 2-decimal strings.

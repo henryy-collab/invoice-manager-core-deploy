@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from invoice_parser.config import AppConfig
@@ -71,11 +72,25 @@ def _make_config(tmp_path):
     })
 
 
-def test_build_records_multi_account_aggregated(tmp_path, monkeypatch):
-    config = _make_config(tmp_path)
+def _make_archive(tmp_path, files: dict):
     archive = tmp_path / "archive"
     archive.mkdir(parents=True)
-    (archive / "5565701224.pdf").write_bytes(b"%PDF-1.4 dummy")
+    for name in files:
+        (archive / name).write_bytes(b"%PDF-1.4 dummy")
+
+
+def _write_state(tmp_path, processed: list[str]):
+    state_dir = tmp_path / "state"
+    state_dir.mkdir(parents=True, exist_ok=True)
+    (state_dir / "last_run_processed.json").write_text(
+        json.dumps({"processed": processed}), encoding="utf-8"
+    )
+
+
+def test_build_records_latest_run_multi_account_aggregated(tmp_path, monkeypatch):
+    config = _make_config(tmp_path)
+    _make_archive(tmp_path, {"5565701224.pdf": None})
+    _write_state(tmp_path, ["5565701224.pdf"])
     monkeypatch.setattr("invoice_parser.processor.extract_text", lambda _p: MULTI_ACCOUNT_TEXT)
 
     result = AccountsService(config).build_records()
@@ -95,9 +110,8 @@ def test_build_records_multi_account_aggregated(tmp_path, monkeypatch):
 
 def test_build_records_single_account_uses_invoice_total(tmp_path, monkeypatch):
     config = _make_config(tmp_path)
-    archive = tmp_path / "archive"
-    archive.mkdir(parents=True)
-    (archive / "5561278890.pdf").write_bytes(b"%PDF-1.4 dummy")
+    _make_archive(tmp_path, {"5561278890.pdf": None})
+    _write_state(tmp_path, ["5561278890.pdf"])
     monkeypatch.setattr("invoice_parser.processor.extract_text", lambda _p: SINGLE_ACCOUNT_TEXT)
 
     result = AccountsService(config).build_records()
@@ -112,14 +126,12 @@ def test_build_records_single_account_uses_invoice_total(tmp_path, monkeypatch):
 
 def test_build_records_aggregates_same_account_across_invoices(tmp_path, monkeypatch):
     config = _make_config(tmp_path)
-    archive = tmp_path / "archive"
-    archive.mkdir(parents=True)
+    _make_archive(tmp_path, {"a.pdf": None, "b.pdf": None})
+    _write_state(tmp_path, ["a.pdf", "b.pdf"])
     texts = {
         "a.pdf": SINGLE_ACCOUNT_TEXT.replace("5561278890", "1111111111").replace("April", "May"),
         "b.pdf": SINGLE_ACCOUNT_TEXT,
     }
-    for name in texts:
-        (archive / name).write_bytes(b"%PDF-1.4 dummy")
     monkeypatch.setattr("invoice_parser.processor.extract_text", lambda p: texts[Path(p).name])
 
     result = AccountsService(config).build_records()
@@ -133,7 +145,51 @@ def test_build_records_aggregates_same_account_across_invoices(tmp_path, monkeyp
     assert {inv["date"] for inv in rec["invoices"]} == {"2026-04-30", "2026-05-30"}
 
 
+def test_build_records_latest_run_excludes_prior_files(tmp_path, monkeypatch):
+    config = _make_config(tmp_path)
+    _make_archive(tmp_path, {"a.pdf": None, "b.pdf": None})
+    _write_state(tmp_path, ["a.pdf"])
+    texts = {
+        "a.pdf": SINGLE_ACCOUNT_TEXT,
+        "b.pdf": SINGLE_ACCOUNT_TEXT.replace("5561278890", "9999999999"),
+    }
+    monkeypatch.setattr("invoice_parser.processor.extract_text", lambda p: texts[Path(p).name])
+
+    result = AccountsService(config).build_records()
+
+    assert result["count"] == 1
+    assert result["records"][0]["account_id"] == "1809831993"
+    assert {inv["number"] for inv in result["records"][0]["invoices"]} == {"5561278890"}
+
+
+def test_build_records_no_state_returns_empty(tmp_path, monkeypatch):
+    config = _make_config(tmp_path)
+    _make_archive(tmp_path, {"a.pdf": None})
+    monkeypatch.setattr("invoice_parser.processor.extract_text", lambda _p: SINGLE_ACCOUNT_TEXT)
+
+    result = AccountsService(config).build_records()
+
+    assert result == {"records": [], "count": 0, "errors": 0}
+
+
+def test_build_records_scope_all_ignores_state(tmp_path, monkeypatch):
+    config = _make_config(tmp_path)
+    _make_archive(tmp_path, {"a.pdf": None, "b.pdf": None})
+    _write_state(tmp_path, ["a.pdf"])
+    texts = {
+        "a.pdf": SINGLE_ACCOUNT_TEXT,
+        "b.pdf": SINGLE_ACCOUNT_TEXT.replace("5561278890", "9999999999").replace("Intertextile Shanghai", "Other Client").replace("180-983-1993", "200-000-0000"),
+    }
+    monkeypatch.setattr("invoice_parser.processor.extract_text", lambda p: texts[Path(p).name])
+
+    result = AccountsService(config).build_records(scope="all")
+
+    assert result["count"] == 2
+    ids = {r["account_id"] for r in result["records"]}
+    assert ids == {"1809831993", "2000000000"}
+
+
 def test_build_records_empty_archive(tmp_path):
     config = _make_config(tmp_path)
-    result = AccountsService(config).build_records()
+    result = AccountsService(config).build_records(scope="all")
     assert result == {"records": [], "count": 0, "errors": 0}

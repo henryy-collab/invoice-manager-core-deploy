@@ -506,6 +506,11 @@ def test_accounts_endpoint_returns_aggregated_records(ui_client, tmp_path, monke
     archive = tmp_path / "data" / "archive"
     archive.mkdir(parents=True)
     (archive / "5565701224.pdf").write_bytes(b"%PDF-1.4 dummy")
+    state_dir = tmp_path / "data" / "state"
+    state_dir.mkdir(parents=True)
+    (state_dir / "last_run_processed.json").write_text(
+        json.dumps({"processed": ["5565701224.pdf"]}), encoding="utf-8"
+    )
 
     monkeypatch.setattr("invoice_parser.processor.extract_text", lambda _path: """Invoice number: 5565701224
 Invoice date: 30 April 2026
@@ -553,6 +558,53 @@ Account budget: HKCT_HKCT Brand_2026 Apr
     assert by_id["8021550535"]["account"] == "HKCT - Brand"
     assert by_id["8021550535"]["amount"] == "804.21"
     assert by_id["8021550535"]["invoices"][0]["date"] == "2026-04-30"
+
+
+def test_accounts_endpoint_latest_run_excludes_prior_and_scope_all(ui_client, tmp_path, monkeypatch):
+    archive = tmp_path / "data" / "archive"
+    archive.mkdir(parents=True)
+    (archive / "a.pdf").write_bytes(b"%PDF-1.4 dummy")
+    (archive / "b.pdf").write_bytes(b"%PDF-1.4 dummy")
+    state_dir = tmp_path / "data" / "state"
+    state_dir.mkdir(parents=True)
+    (state_dir / "last_run_processed.json").write_text(
+        json.dumps({"processed": ["a.pdf"]}), encoding="utf-8"
+    )
+
+    base = """Invoice number: 5561278890
+Invoice date: 30 April 2026
+Total amount due in HKD
+HK$18,995.38
+HK$0.00
+HK$18,995.38
+Account: Intertextile Shanghai [Monthly Invoicing]
+Account ID: 180-983-1993
+Account budget: Monthly Invoicing
+"""
+    texts = {
+        "a.pdf": base,
+        "b.pdf": base.replace("5561278890", "9999999999").replace("Intertextile Shanghai", "Other Client").replace("180-983-1993", "200-000-0000"),
+    }
+    monkeypatch.setattr("invoice_parser.processor.extract_text", lambda p: texts[p.name])
+
+    latest = ui_client.get("/api/accounts").json()
+    assert latest["count"] == 1
+    assert latest["records"][0]["account_id"] == "1809831993"
+
+    all_data = ui_client.get("/api/accounts?scope=all").json()
+    assert all_data["count"] == 2
+    assert {r["account_id"] for r in all_data["records"]} == {"1809831993", "2000000000"}
+
+
+def test_accounts_endpoint_no_state_returns_empty(ui_client, tmp_path, monkeypatch):
+    archive = tmp_path / "data" / "archive"
+    archive.mkdir(parents=True)
+    (archive / "a.pdf").write_bytes(b"%PDF-1.4 dummy")
+    monkeypatch.setattr("invoice_parser.processor.extract_text", lambda _p: "irrelevant")
+
+    res = ui_client.get("/api/accounts")
+    assert res.status_code == 200
+    assert res.json() == {"records": [], "count": 0, "errors": 0}
 
 
 def test_download_csv_uses_alternate_report_columns(ui_client, tmp_path, monkeypatch):

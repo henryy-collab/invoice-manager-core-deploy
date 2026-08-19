@@ -18,13 +18,17 @@ class AccountsService:
     def from_request(cls, request: Request) -> "AccountsService":
         return cls(get_app_config(request))
 
-    def build_records(self, source_dir: Optional[str] = None) -> dict:
+    def build_records(self, source_dir: Optional[str] = None, scope: str = "latest") -> dict:
         folder = Path(source_dir or self.config.archive_folder)
         aggregated: dict[str, dict] = {}
         errors = 0
 
+        allowed = self._latest_run_files() if scope == "latest" else None
+
         if folder.is_dir():
             for pdf_path in sorted(folder.glob("*.pdf")):
+                if allowed is not None and pdf_path.name not in allowed:
+                    continue
                 try:
                     result = parse_single_pdf(pdf_path, self.config)
                     self._merge_document(result.document.to_dict(), aggregated)
@@ -43,6 +47,14 @@ class AccountsService:
         records.sort(key=lambda r: r["account"].lower())
 
         return {"records": records, "count": len(records), "errors": errors}
+
+    def _latest_run_files(self) -> Optional[set[str]]:
+        state_path = Path(self.config.output_folder).parent / "state" / "last_run_processed.json"
+        try:
+            data = json.loads(state_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return set()
+        return set(data.get("processed") or [])
 
     def _merge_document(self, fields: dict, aggregated: dict) -> None:
         accounts_raw = fields.get("accounts")
