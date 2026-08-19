@@ -30,6 +30,15 @@ def ui_client(tmp_path, monkeypatch):
                         "unknown_values": ["-"],
                         "fallback": "UNKNOWN",
                     },
+                    "account_id": {
+                        "parser": "account_id",
+                        "patterns": [
+                            {"regex": "Account:\\s*[^\\[]*?\\[([\\d\\-]+)\\]", "group": 1, "flags": ["IGNORECASE"]},
+                            {"regex": "Account\\s*ID[:\\s]+([\\d\\-]+)", "group": 1, "flags": ["IGNORECASE"]},
+                        ],
+                        "unknown_values": ["-"],
+                        "fallback": "UNKNOWN",
+                    },
                     "number": {
                         "parser": "number",
                         "patterns": [{"regex": "Invoice\\s*number[:\\s]+([A-Z0-9\\-]+)", "group": 1, "flags": ["IGNORECASE"]}],
@@ -404,6 +413,25 @@ Total amount due in HKD: HK$ 9,999.99
     assert "9999.99" in content
     assert "Invoice No." in content
     assert "5561278890" not in content
+
+
+def test_preview_parses_account_id_separately(ui_client, tmp_path, monkeypatch):
+    pdf = tmp_path / "data" / "incoming" / "test.pdf"
+    pdf.write_bytes(b"%PDF-1.4 dummy")
+
+    monkeypatch.setattr("invoice_parser.processor.extract_text", lambda _path: """Account: Test Client [12345]
+Invoice number: 5561278890
+Invoice date: 15 April 2024
+Total amount due in HKD: HK$ 9,999.99
+""")
+
+    res = ui_client.post("/api/parse/preview")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["processed_count"] == 1
+    fields = data["results"][0]["fields"]
+    assert fields["account"] == "Test Client"
+    assert fields["account_id"] == "12345"
 
 
 def test_download_csv_uses_alternate_report_columns(ui_client, tmp_path, monkeypatch):

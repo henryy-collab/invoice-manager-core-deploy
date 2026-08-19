@@ -1,6 +1,6 @@
 "use strict";
 
-const FIELD_KEYS = ["account", "number", "date", "total", "currency"];
+const FIELD_KEYS = ["account", "account_id", "number", "date", "total", "currency"];
 const STEPS = ["pull", "preview", "review", "rename", "report", "push", "clear"];
 
 const workflowModule = {
@@ -484,7 +484,7 @@ const workflowModule = {
     tbody.innerHTML = "";
 
     if (data.results.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="8" class="empty-state">No files to process.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="9" class="empty-state">No files to process.</td></tr>`;
       return;
     }
 
@@ -497,6 +497,7 @@ const workflowModule = {
       tr.innerHTML = `
         <td>${escapeHtml(r.source_name)}${r.number_fallback_used ? " *" : ""}</td>
         ${this._editableCell(r.source_name, "account", f.account)}
+        ${this._editableCell(r.source_name, "account_id", f.account_id)}
         ${this._editableCell(r.source_name, "number", f.number)}
         ${this._editableCell(r.source_name, "date", f.date)}
         ${this._editableCell(r.source_name, "total", f.total)}
@@ -617,9 +618,9 @@ const workflowModule = {
       document.getElementById("process-summary").innerHTML = "";
       const tbody = document.querySelector("#process-table tbody");
       if (this._state.completedSteps.has("rename") || this._state.completedSteps.has("push") || this._state.completedSteps.has("clear")) {
-        tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Files processed. Use the Files tab to see results.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="empty-state">Files processed. Use the Files tab to see results.</td></tr>`;
       } else {
-        tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Click Process Invoices or Preview to see planned renames.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="empty-state">Click Process Invoices or Preview to see planned renames.</td></tr>`;
       }
     }
   },

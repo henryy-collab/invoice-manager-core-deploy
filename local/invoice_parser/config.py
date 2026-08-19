@@ -156,9 +156,16 @@ class ParsersConfig(BaseModel):
     account: AccountParserConfig = Field(default_factory=lambda: AccountParserConfig(
         patterns=[
             RegexPattern(regex=r"^Account:\s*(.+?)(?=\s*\[|\s*$)", flags=["IGNORECASE", "MULTILINE"]),
+        ],
+        unknown_values=["-", "—", "--", "N/A", "n/a"],
+    ))
+    account_id: AccountParserConfig = Field(default_factory=lambda: AccountParserConfig(
+        patterns=[
+            RegexPattern(regex=r"Account:\s*[^\[]*?\[([\d\-]+)\]", flags=["IGNORECASE"]),
             RegexPattern(regex=r"Account\s*ID[:\s]+([\d\-]+)", flags=["IGNORECASE"]),
         ],
         unknown_values=["-", "—", "--", "N/A", "n/a"],
+        fallback="UNKNOWN",
     ))
     number: NumberParserConfig = Field(default_factory=lambda: NumberParserConfig(
         patterns=[
@@ -202,6 +209,7 @@ class PlaceholderConfig(BaseModel):
 class FilenameConfig(BaseModel):
     placeholders: dict[str, PlaceholderConfig] = Field(default_factory=lambda: {
         "account": PlaceholderConfig(sanitize=True, fallback="UNKNOWN"),
+        "account_id": PlaceholderConfig(sanitize=True, fallback="unknown"),
         "number": PlaceholderConfig(sanitize=True, fallback="unknown"),
         "date": PlaceholderConfig(fallback="unknown-date"),
         "total": PlaceholderConfig(fallback="unknown"),
@@ -219,6 +227,7 @@ class FilenameConfig(BaseModel):
     def ensure_default_placeholders(self):
         defaults = {
             "account": PlaceholderConfig(sanitize=True, fallback="UNKNOWN"),
+            "account_id": PlaceholderConfig(sanitize=True, fallback="unknown"),
             "number": PlaceholderConfig(sanitize=True, fallback="unknown"),
             "date": PlaceholderConfig(fallback="unknown-date"),
             "total": PlaceholderConfig(fallback="unknown"),
@@ -260,6 +269,7 @@ class DocumentTypeConfig(BaseModel):
     def ensure_default_placeholders(self):
         defaults = {
             "account": PlaceholderConfig(sanitize=True, fallback="UNKNOWN"),
+            "account_id": PlaceholderConfig(sanitize=True, fallback="unknown"),
             "number": PlaceholderConfig(sanitize=True, fallback="unknown"),
             "date": PlaceholderConfig(fallback="unknown-date"),
             "total": PlaceholderConfig(fallback="unknown"),
@@ -333,7 +343,7 @@ class AppConfig(BaseModel):
         features = self.features
 
         fields = {}
-        for name, parser_name in [("account", "account"), ("number", "number"), ("date", "date"), ("currency", "currency"), ("total", "total")]:
+        for name, parser_name in [("account", "account"), ("account_id", "account_id"), ("number", "number"), ("date", "date"), ("currency", "currency"), ("total", "total")]:
             parser_config = getattr(parsers, name, None)
             field_config = {"parser": parser_name}
             if parser_config is not None:

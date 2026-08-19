@@ -14,6 +14,22 @@ def test_parse_account_returns_none_when_missing(sample_config):
     assert parse_account("No account here", sample_config.parsers.account) is None
 
 
+def test_parse_account_bracketed_returns_name_only(sample_config):
+    assert parse_account("Account: Test Client [12345]", sample_config.parsers.account) == "Test Client"
+
+
+def test_parse_account_id_bracketed(sample_config):
+    assert parse_account("Account: Test Client [12345]", sample_config.parsers.account_id) == "12345"
+
+
+def test_parse_account_id_explicit_line(sample_config):
+    assert parse_account("Account ID: 12345", sample_config.parsers.account_id) == "12345"
+
+
+def test_parse_account_id_missing(sample_config):
+    assert parse_account("Account: ACME Inc", sample_config.parsers.account_id) is None
+
+
 def test_normalize_account_known_value(sample_config):
     assert normalize_account("ACME", sample_config.parsers.account) == "ACME"
 
@@ -150,3 +166,15 @@ def test_parse_invoice(sample_text, sample_config):
     assert invoice.date == "20240415"
     assert invoice.total == "12345.67"
     assert invoice.currency == "HKD"
+
+
+def test_parse_invoice_extracts_account_id_separately(sample_config):
+    text = """
+Account: Test Client [12345]
+Invoice number: 5561278890
+Invoice date: 15 April 2024
+Total amount due in HKD: HK$ 9,999.99
+"""
+    invoice = parse_invoice(text, "5561278890", sample_config)
+    assert invoice.account == "Test Client"
+    assert invoice.account_id == "12345"

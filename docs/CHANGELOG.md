@@ -2,6 +2,16 @@
 
 A record of merged features and notable changes for Invoice Manager Core.
 
+## 2026-08-19 — Separate account ID field
+
+- **New `account_id` field**: the PDF parser now captures the account ID separately from the account name.
+  - `account` is the account name only (e.g. `Test Client` from `Account: Test Client [12345]`).
+  - `account_id` captures the numeric ID from either the bracketed form (`[12345]`) or a standalone `Account ID: 12345` line.
+  - Invoices that only contain an account ID (no account name) now go to manual review instead of using the ID as the name.
+- The account ID flows through parse results, `.meta.json` sidecars, the filename placeholder `{account_id}`, and the UI preview table (new editable Account ID column). It is not yet mapped into the CSV or Google Sheets reports.
+- New `account_id` config: `parsers.account_id` (and per-document-type `fields.account_id`), plus `account_id` filename placeholder defaults.
+- UI Config tab now exposes Account ID parser and placeholder options; frontend assets cache-busted to `?v=8`.
+
 ## 2026-08-05 — Documented release workflow
 
 - Source of truth for development: `henryy-collab/invoice-manager-core`.

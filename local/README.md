@@ -6,7 +6,7 @@ This Python script reads PDF invoices, extracts key fields using **PyMuPDF**, an
 
 - Scans a configured source folder for PDFs.
 - Extracts text from each PDF with PyMuPDF (fast, low memory, no external AI models).
-- Classifies each PDF to a configured **document type** and parses account, invoice number, invoice date, total amount, and currency using per-type regex patterns.
+- Classifies each PDF to a configured **document type** and parses account, account ID, invoice number, invoice date, total amount, and currency using per-type regex patterns.
 - Renames files based on a per-document-type filename template.
 - Uses the original filename as the invoice number if the PDF text does not contain it (configurable).
 - Falls back to `000_<original>.pdf` when configured required fields cannot be found, so manual-review files sort to the top.
@@ -89,6 +89,15 @@ Each entry under `document_types` describes how to recognise and parse one kind 
           "unknown_values": ["-", "—", "--", "N/A", "n/a"],
           "fallback": "UNKNOWN"
         },
+        "account_id": {
+          "parser": "account_id",
+          "patterns": [
+            {"regex": "Account:\\s*[^\\[]*?\\[([\\d\\-]+)\\]", "group": 1, "flags": ["IGNORECASE"]},
+            {"regex": "Account\\s*ID[:\\s]+([\\d\\-]+)", "group": 1, "flags": ["IGNORECASE"]}
+          ],
+          "unknown_values": ["-", "—", "--", "N/A", "n/a"],
+          "fallback": "UNKNOWN"
+        },
         "number": {
           "parser": "number",
           "patterns": [
@@ -129,6 +138,7 @@ Each entry under `document_types` describes how to recognise and parse one kind 
       "filename_template": "{account}_{number}_Invoice_{date}.pdf",
       "placeholders": {
         "account": {"sanitize": true, "fallback": "UNKNOWN"},
+        "account_id": {"sanitize": true, "fallback": "unknown"},
         "number": {"sanitize": true, "fallback": "unknown"},
         "date": {"fallback": "unknown-date"},
         "total": {"fallback": "unknown"},
@@ -150,8 +160,8 @@ Each entry under `document_types` describes how to recognise and parse one kind 
 Per-document-type sections:
 
 - `classifier`: regex patterns used to decide whether a PDF belongs to this document type.
-- `fields`: parser configuration for each field. The `parser` key selects the strategy (`account`, `number`, `date`, `currency`, `total`, or custom). Other keys are passed through to that parser.
-- `filename_template`: output filename pattern; supports `{account}`, `{number}`, `{date}`, `{total}`, `{currency}`.
+- `fields`: parser configuration for each field. The `parser` key selects the strategy (`account`, `account_id`, `number`, `date`, `currency`, `total`, or custom). Other keys are passed through to that parser.
+- `filename_template`: output filename pattern; supports `{account}`, `{account_id}`, `{number}`, `{date}`, `{total}`, `{currency}`.
 - `placeholders`: fallback values and sanitisation flags used when building the filename.
 - `manual_review_for_missing`: fields that must be present; missing any triggers the manual-review prefix.
 - `report_columns`: maps fields to fixed CSV/Google Sheets column headers.

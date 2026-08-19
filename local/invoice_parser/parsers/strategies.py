@@ -17,6 +17,12 @@ def _run_account(text: str, _filename_stem: str, _date_format: str, field_config
     return parse_account(text, config)
 
 
+def _run_account_id(text: str, _filename_stem: str, _date_format: str, field_config: FieldConfig, _config: AppConfig) -> Optional[str]:
+    from invoice_parser.config import AccountParserConfig
+    config = AccountParserConfig.model_validate(field_config.model_dump())
+    return parse_account(text, config)
+
+
 def _run_number(text: str, filename_stem: str, _date_format: str, field_config: FieldConfig, _config: AppConfig) -> Optional[str]:
     from invoice_parser.config import NumberParserConfig
     config = NumberParserConfig.model_validate(field_config.model_dump())
@@ -43,6 +49,7 @@ def _run_total(text: str, _filename_stem: str, _date_format: str, field_config: 
 
 STRATEGIES: dict[str, Strategy] = {
     "account": _run_account,
+    "account_id": _run_account_id,
     "number": _run_number,
     "date": _run_date,
     "currency": _run_currency,
@@ -64,7 +71,7 @@ def run_strategy(
 
 
 def normalize_field(value: Optional[str], field_name: str, field_config: FieldConfig) -> Optional[str]:
-    if field_name != "account" or value is None:
+    if field_name not in ("account", "account_id") or value is None:
         return value
     from invoice_parser.config import AccountParserConfig
     config = AccountParserConfig.model_validate(field_config.model_dump())

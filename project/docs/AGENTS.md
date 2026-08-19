@@ -206,6 +206,7 @@ See `docs/CHANGELOG.md` for a full history of merged features.
 - Coolify auto-deploys from the deployment mirror's `master` branch.
 - Google Sheets reporting is configured under `google_sheets` in `local_config.json`. Enable it and set `spreadsheet_url` to append processed invoice details to monthly tabs based on invoice date. The Google Sheets API must be enabled in the same Cloud project.
 - Document types are configured under `document_types`; the default type is `googleadsinvoice`.
+- The parser captures the account **name** (`account`) and the numeric account **ID** (`account_id`) as separate fields. `account_id` is parsed from the bracketed form (`Account: Name [12345]`) or a standalone `Account ID: 12345` line, flows into parse results and `.meta.json` sidecars, and is available as the `{account_id}` filename placeholder. It is not yet mapped into CSV/Google Sheets report columns.
 
 ### Known quirks
 

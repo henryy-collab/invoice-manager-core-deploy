@@ -82,7 +82,7 @@ class ParseService:
                 results.append(ParseResultItem(
                     source_name=pdf_path.name,
                     source_path=str(pdf_path),
-                    fields={"account": None, "number": None, "date": None, "total": None, "currency": None},
+                    fields={"account": None, "account_id": None, "number": None, "date": None, "total": None, "currency": None},
                     missing_required=[],
                     target_name=pdf_path.name,
                     needs_manual_review=True,
