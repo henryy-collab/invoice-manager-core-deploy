@@ -493,13 +493,66 @@ Account budget: HKCT_HKCT Brand_2026 Apr
     assert data["processed_count"] == 1
     fields = data["results"][0]["fields"]
     assert fields["account"] == "HKCT - Brand"
-    assert fields["account_id"] == "802-155-0535"
+    assert fields["account_id"] == "8021550535"
     import json
     records = json.loads(fields["accounts"])
     assert records == [
-        {"account": "HKCT - Brand", "account_id": "802-155-0535", "amount": "804.21"},
-        {"account": "HKCT - CIE", "account_id": "751-190-9696", "amount": "18813.00"},
+        {"account": "HKCT - Brand", "account_id": "8021550535", "amount": "804.21"},
+        {"account": "HKCT - CIE", "account_id": "7511909696", "amount": "18813.00"},
     ]
+
+
+def test_accounts_endpoint_returns_aggregated_records(ui_client, tmp_path, monkeypatch):
+    archive = tmp_path / "data" / "archive"
+    archive.mkdir(parents=True)
+    (archive / "5565701224.pdf").write_bytes(b"%PDF-1.4 dummy")
+
+    monkeypatch.setattr("invoice_parser.processor.extract_text", lambda _path: """Invoice number: 5565701224
+Invoice date: 30 April 2026
+Total amount due in HKD
+HK$19,617.21
+HK$0.00
+HK$19,617.21
+Summary of costs by account budget
+1 Apr 2026 - 30 Apr 2026
+Account ID
+Account
+Account budget
+Purchase
+Order
+Amount(HK$)
+802-155-
+0535
+HKCT - Brand [Monthly Invoicing]
+HKCT_HKCT Brand_2026 Apr
+804.21
+751-190-
+9696
+HKCT - CIE [Monthly Invoicing]
+HKCT_CIE_2026 Apr
+18,813.00
+Tax Invoice
+Invoice number: 5565701224
+Page 3 of 10
+HK$804.21
+HK$0.00
+HK$804.21
+Subtotal in HKD
+GST (0%)
+Total in HKD
+Account: HKCT - Brand [Monthly Invoicing]
+Account ID: 802-155-0535
+Account budget: HKCT_HKCT Brand_2026 Apr
+""")
+
+    res = ui_client.get("/api/accounts")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["count"] == 2
+    by_id = {r["account_id"]: r for r in data["records"]}
+    assert by_id["8021550535"]["account"] == "HKCT - Brand"
+    assert by_id["8021550535"]["amount"] == "804.21"
+    assert by_id["8021550535"]["invoices"][0]["date"] == "2026-04-30"
 
 
 def test_download_csv_uses_alternate_report_columns(ui_client, tmp_path, monkeypatch):

@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from invoice_ui.config import UIConfig
 from invoice_ui.routers import (
+    accounts_router,
     config_router,
     files_router,
     logs_router,
@@ -32,6 +33,7 @@ def create_app() -> FastAPI:
     app.include_router(sync_router)
     app.include_router(reports_router)
     app.include_router(sheets_router)
+    app.include_router(accounts_router)
 
     static_dir = ui_config.static_dir
     if static_dir.exists():

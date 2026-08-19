@@ -205,7 +205,7 @@ Account budget: Monthly Invoicing - 20230620
     records = json.loads(result)
     assert records == [{
         "account": "Intertextile Shanghai",
-        "account_id": "180-983-1993",
+        "account_id": "1809831993",
         "amount": "18995.38",
     }]
 
@@ -236,8 +236,8 @@ Tax Invoice
     import json
     records = json.loads(result)
     assert records == [
-        {"account": "HKCT - Brand", "account_id": "802-155-0535", "amount": "804.21"},
-        {"account": "HKCT - CIE", "account_id": "751-190-9696", "amount": "18813.00"},
+        {"account": "HKCT - Brand", "account_id": "8021550535", "amount": "804.21"},
+        {"account": "HKCT - CIE", "account_id": "7511909696", "amount": "18813.00"},
     ]
 
 
@@ -272,7 +272,7 @@ Tax Invoice
     records = json.loads(result)
     assert records == [{
         "account": "FUJIFILM Business Innovation",
-        "account_id": "371-358-5594",
+        "account_id": "3713585594",
         "amount": "-37.96",
     }]
 
@@ -290,5 +290,5 @@ Account budget: Monthly Invoicing
     import json
     records = json.loads(result)
     assert records == [
-        {"account": "CC16", "account_id": "951-822-6080", "amount": "-40.83"},
+        {"account": "CC16", "account_id": "9518226080", "amount": "-40.83"},
     ]

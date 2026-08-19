@@ -21,7 +21,10 @@ def _run_account(text: str, _filename_stem: str, _date_format: str, field_config
 def _run_account_id(text: str, _filename_stem: str, _date_format: str, field_config: FieldConfig, _config: AppConfig) -> Optional[str]:
     from invoice_parser.config import AccountParserConfig
     config = AccountParserConfig.model_validate(field_config.model_dump())
-    return parse_account(text, config)
+    value = parse_account(text, config)
+    if value:
+        value = value.replace("-", "")
+    return value
 
 
 def _run_accounts(text: str, _filename_stem: str, _date_format: str, field_config: FieldConfig, _config: AppConfig) -> Optional[str]:

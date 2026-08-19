@@ -111,8 +111,8 @@ Account budget: HKCT_HKCT Brand_2026 Apr
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
     assert meta["account"] == "HKCT - Brand"
     assert meta["accounts"] == [
-        {"account": "HKCT - Brand", "account_id": "802-155-0535", "amount": "804.21"},
-        {"account": "HKCT - CIE", "account_id": "751-190-9696", "amount": "18813.00"},
+        {"account": "HKCT - Brand", "account_id": "8021550535", "amount": "804.21"},
+        {"account": "HKCT - CIE", "account_id": "7511909696", "amount": "18813.00"},
     ]
 
 

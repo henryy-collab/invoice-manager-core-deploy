@@ -56,7 +56,7 @@ def _parse_summary_table(text: str, config: AccountsParserConfig) -> Optional[li
         name = re.sub(r"\s*\[.*$", "", " ".join(x.strip() for x in name_parts).strip())
         rows.append({
             "account": name,
-            "account_id": current["id"],
+            "account_id": current["id"].replace("-", ""),
             "amount": amount or "",
         })
         current = None
@@ -122,12 +122,12 @@ def _extract_account_id(lines: list[str], idx: int, account_id_re: re.Pattern, c
     for i in range(idx - 1, start - 1, -1):
         match = account_id_re.search(lines[i])
         if match:
-            return match.group(1).strip()
+            return match.group(1).strip().replace("-", "")
     end = min(len(lines), idx + 1 + config.id_lookahead)
     for i in range(idx + 1, end):
         match = account_id_re.search(lines[i])
         if match:
-            return match.group(1).strip()
+            return match.group(1).strip().replace("-", "")
     return None
 
 

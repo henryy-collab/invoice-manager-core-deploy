@@ -2,6 +2,15 @@
 
 A record of merged features and notable changes for Invoice Manager Core.
 
+## 2026-08-19 — Account-keyed data endpoint and normalized account IDs
+
+- **`GET /api/accounts`** (new, separate from the parse/report flow): returns a JSON array of extracted fields keyed by `account_id` as the unique identifier.
+  - Reads the archived processed PDFs (`local/data/archive/`, where every run accumulates) by default; an optional `?folder=` query parameter can point elsewhere.
+  - Records are aggregated by `account_id`: `{account_id, account, amount, invoice_count, invoices:[{number, date, currency, amount}]}`.
+  - `date` is normalized to ISO (`2026-06-30`); amounts are summed per account and formatted as 2-decimal strings.
+  - New `accounts_service.py` + `accounts_router.py`, registered in the app.
+- **Account IDs are now digits-only**: the parser strips dashes from `account_id` (`802-155-0535` → `8021550535`) everywhere it is extracted — the `account_id` field, the `accounts` breakdown, sidecars, and the new endpoint — so it is a single canonical unique identifier.
+
 ## 2026-08-19 — Per-account breakdown in `.meta.json` sidecar
 
 - **New `accounts` field**: each parsed invoice now includes a per-account breakdown linking each account name to its own account ID and amount.
