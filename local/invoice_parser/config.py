@@ -335,6 +335,31 @@ class GoogleSheetsConfig(BaseModel):
         return v
 
 
+class PlatformConfig(BaseModel):
+    rclone: RcloneConfig | None = None
+    google_sheets: GoogleSheetsConfig | None = None
+
+    def _overlay_values(self, mine, cls) -> dict:
+        defaults = cls().model_dump()
+        return {
+            key: value
+            for key, value in mine.model_dump().items()
+            if value != defaults.get(key)
+        }
+
+    def merged_rclone(self, base: RcloneConfig) -> RcloneConfig:
+        data = base.model_dump()
+        if self.rclone is not None:
+            data.update(self._overlay_values(self.rclone, RcloneConfig))
+        return RcloneConfig.model_validate(data)
+
+    def merged_google_sheets(self, base: GoogleSheetsConfig) -> GoogleSheetsConfig:
+        data = base.model_dump()
+        if self.google_sheets is not None:
+            data.update(self._overlay_values(self.google_sheets, GoogleSheetsConfig))
+        return GoogleSheetsConfig.model_validate(data)
+
+
 class NocoDBConfig(BaseModel):
     enabled: bool = False
     base_id: str = ""
@@ -347,6 +372,7 @@ class NocoDBConfig(BaseModel):
         "total": "topped_amount",
         "currency": "currency",
         "source": "source",
+        "document_type": "invoice_type",
     })
 
 
@@ -369,6 +395,29 @@ class AppConfig(BaseModel):
     reports: ReportsConfig = Field(default_factory=ReportsConfig)
     google_sheets: GoogleSheetsConfig = Field(default_factory=GoogleSheetsConfig)
     nocodb: NocoDBConfig = Field(default_factory=NocoDBConfig)
+    platforms: dict[str, PlatformConfig] = Field(default_factory=dict)
+
+    def _platform(self, document_type: str) -> PlatformConfig | None:
+        return self.platforms.get(document_type)
+
+    def rclone_for(self, document_type: str) -> RcloneConfig:
+        platform = self._platform(document_type)
+        if platform is not None:
+            return platform.merged_rclone(self.rclone)
+        return self.rclone
+
+    def google_sheets_for(self, document_type: str) -> GoogleSheetsConfig:
+        platform = self._platform(document_type)
+        if platform is not None:
+            return platform.merged_google_sheets(self.google_sheets)
+        return self.google_sheets
+
+    def platform_types(self) -> list[str]:
+        configured = [dt for dt, p in self.platforms.items() if p is not None]
+        default = self.default_document_type
+        if default not in configured:
+            configured.insert(0, default)
+        return configured
 
     @model_validator(mode="after")
     def migrate_flat_config_to_document_types(self):
@@ -395,10 +444,12 @@ class AppConfig(BaseModel):
             "manual_review_for_missing": features.manual_review_for_missing,
             "report_columns": {
                 "account": "Client Ref.",
+                "account_id": "Account ID",
                 "date": "PDF Invoice Date",
                 "number": "PDF Invoice No.",
                 "currency": "Topped Currency",
                 "total": "Topped amount",
+                "platform": "Platform",
             },
         }
 

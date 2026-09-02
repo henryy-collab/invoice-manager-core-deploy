@@ -2,6 +2,50 @@
 
 A record of merged features and notable changes for Invoice Manager Core.
 
+## 2026-09-02 — account_id report column; Platform carries document type
+
+- **New `Account ID` report column** (index 1, after `Client Ref.`) in both the Google Sheets report rows and the CSV export (`sheets.py` `HEADER_COLUMNS`, `reports_service.py` `_COLUMNS`/`ReportRow`).
+- Wired `account_id` parsing for **Google** invoices: added the `account_id` field (`parser: account_id`) to `google_ads` in `local_config.json` (facebook already had it), so google sidecars/rows now carry digits-only account IDs (dashes stripped, e.g. `933-864-1234` → `9338641234`).
+- **`document_type` now shows in the `Platform` column only** for both types; removed the `document_type → Invoice Type` mapping (`Invoice Type` column header remains but is empty until mapped).
+- Config `report_columns` for both types now map `account_id → "Account ID"` and `platform → "Platform"`.
+- `config.py` flat→registry migration default report columns updated to match; UI config editor (`config.js`) fixed-columns list now includes `Account ID` (cache-buster `?v=11`).
+- **Tests**: report column index assertions updated, new `test_format_row_reports_account_id`, google `account_id` dash-strip extraction test, CSV `Account ID` assertion in UI tests.
+
+## 2026-09-02 — Per-platform wiring by document type (Google + Meta)
+
+- The app now routes files and reports **by classified document type**. Google (`google_ads`) and Meta (`facebook`) invoices are pulled from their own Drive input folders, pushed to their own Drive destination folders, and reported to their own Google Sheets workbooks — all from a single shared workflow.
+- **New `platforms` config section** in `local_config.json` / `local_config.example.json`: optional per-type `rclone` and `google_sheets` overlays that merge on top of the top-level defaults (top-level `rclone`/`google_sheets` remain the `google_ads`/default configuration). New `AppConfig.platforms`, `PlatformConfig`, and helpers `rclone_for()`, `google_sheets_for()`, `platform_types()` in `local/invoice_parser/config.py`.
+- **Pull** (`SyncService.pull_incoming`): copies each platform's `source_drive_folder` into the shared `incoming/` using `rclone copy` (not `sync`, which would delete the other platform's files).
+- **Push** (`SyncService.push_outgoing`): reads each renamed PDF's `.meta.json` `document_type`, resolves that platform's `destination_drive_folder`, and groups into its `{year}{month}` subfolder.
+- **Clear remote input** (`SyncService.clear_remote_input`): deletes the processed list from each platform's `source_drive_folder`.
+- **Reports** (`SheetsService.write_preview_results`): preview documents are grouped by `document_type` and written to that platform's spreadsheet via `google_sheets_for()` (`facebook` → `1ckywITADXmCUlSVI75XPii9SU6rbenNHDwJ3tl6qMS4`, `google_ads` → existing `1Rngh…RKgas`). The `Platform`/`Invoice Type` columns continue to label rows.
+- **Sync status** now reports the resolved per-platform configuration list.
+- **Tests**: new `local/tests/test_platforms.py` (merge/fallback helpers) and per-platform pull/push/clear coverage in `ui/tests/test_sync_service.py`.
+
+## 2026-09-02 — Report document type in the `Platform` column (both platforms)
+
+- The report **Platform column** now reports the classified document type (`google_ads` / `facebook`) for every row, in both the Google Sheets report and the CSV export.
+- Implemented as a `platform` pseudo-field alongside `document_type` in the reporting row builders (`local/invoice_parser/reports/sheets.py` `_format_row` and `ui/invoice_ui/services/reports_service.py` `_result_to_row`): mapping `"platform": "Platform"` in a type's `report_columns` populates it with the document type.
+- Added `"platform": "Platform"` to the `report_columns` of both `google_ads` and `facebook`.
+- Added the missing `document_type → Invoice Type` mapping to the live `google_ads` config so its Google Sheets rows report the invoice type like `facebook` already did.
+
+## 2026-09-02 — Document type key rename (`googleadsinvoice` → `google_ads`, `meta_ads` → `facebook`)
+
+- Renamed the `document_types` registry keys to match platform-facing names: `googleadsinvoice` → `google_ads`, `meta_ads` → `facebook`.
+- Updated `default_document_type` to `google_ads`, the parser default (`models.py`), the UI schema default (`schemas.py`), both config files, and all tests/docs references.
+- Behavior and parsing configuration are unchanged — only the type identifiers in `.meta.json` sidecars and the **Invoice Type** column change (e.g. `google_ads`, `facebook`).
+- Added a new `facebook` document type for Meta (Facebook/Meta Platforms) invoices: parses `PO Number`, `Account Id / Group`, `Invoice #`, `Invoice Date` (`%d-%b-%Y`), `Invoice Currency`, and `Invoice Total`.
+
+## 2026-09-02 — Report the identified invoice type
+
+- The parsed `document_type` (e.g. `googleadsinvoice`) is now reported wherever invoice data goes out.
+- **`.meta.json` sidecars** now include a `document_type` field (`write_metadata_file`), so archived/outgoing metadata records the classified type.
+- **Google Sheets report**: new **Invoice Type** column appended to the fixed `HEADER_COLUMNS`. Map `document_type` in a type's `report_columns` to populate it.
+- **CSV export**: new **Invoice Type** column in the exported report; populated from the preview result's `document_type`.
+- **NocoDB upload**: `document_type` added to the default `column_map` (`document_type → invoice_type`).
+- **Config editor**: the report-columns mapping in the UI now offers the **Invoice Type** column and a `document_type` field option.
+- **Tests**: sidecar, Sheets `_format_row`, NocoDB payload, and CSV-export coverage added; both suites pass.
+
 ## 2026-09-02 — Subagent task-breaking guidance
 
 - Added a **"Working with subagents"** section to the root `AGENTS.md` and an item in the `project/docs/AGENTS.md` "User's working style": break large tasks into small, single-responsibility parts, give each part its own verification, pack subagent prompts with full context, and re-run both test suites after integrating subagent output.

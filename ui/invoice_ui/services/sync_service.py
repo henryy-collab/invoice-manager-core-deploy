@@ -70,6 +70,11 @@ class SyncService:
     def _state_dir(self) -> Path:
         return Path(self.config.output_folder).parent / "state"
 
+    def _ensure_state_dir(self) -> Path:
+        state_dir = self._state_dir()
+        state_dir.mkdir(parents=True, exist_ok=True)
+        return state_dir
+
     def _last_run_state_path(self) -> Path:
         return self._state_dir() / "last_run_processed.json"
 
@@ -129,51 +134,54 @@ class SyncService:
         except (json.JSONDecodeError, OSError):
             return None
 
+    def _metadata_document_type(self, pdf_path: Path) -> str:
+        meta_path = pdf_path.with_suffix(pdf_path.suffix + ".meta.json")
+        if meta_path.exists():
+            try:
+                meta = json.loads(meta_path.read_text(encoding="utf-8"))
+                return meta.get("document_type") or self.config.default_document_type
+            except (json.JSONDecodeError, OSError):
+                pass
+        return self.config.default_document_type
+
     def pull_incoming(self) -> dict:
         if not self.config.rclone.enabled:
             return {"success": False, "error": "rclone sync is disabled in config"}
-        remote_path = self._remote_path(self.config.rclone.source_drive_folder)
-        if remote_path is None:
-            return {"success": False, "error": "source_drive_folder is not configured"}
         local_path = str(Path(self.config.input_folder))
 
         before_count = len(list(Path(local_path).glob("*.pdf"))) if Path(local_path).exists() else 0
-        result = self._run_rclone(["sync", remote_path, local_path])
-        if not result["success"]:
-            return result
+        platform_results: dict[str, bool] = {}
+        errors: list[str] = []
 
+        for document_type in self.config.platform_types():
+            rconfig = self.config.rclone_for(document_type)
+            remote_path = self._remote_path(rconfig.source_drive_folder)
+            if remote_path is None:
+                continue
+            result = self._run_rclone(["copy", remote_path, local_path])
+            platform_results[document_type] = result["success"]
+            if not result["success"]:
+                errors.append(f"{document_type}: {result.get('error') or result.get('stderr') or 'rclone failed'}")
+
+        success = not errors
         after_count = len(list(Path(local_path).glob("*.pdf"))) if Path(local_path).exists() else 0
         transferred = max(0, after_count - before_count)
-        result["before_count"] = before_count
-        result["after_count"] = after_count
-        result["transferred"] = transferred
-        if transferred == 0:
-            result["message"] = "Pull completed but no new files were downloaded."
-        else:
-            result["message"] = f"Pull completed. {transferred} new file(s) downloaded."
+        result: dict = {
+            "success": success,
+            "platforms": platform_results,
+            "errors": errors,
+            "before_count": before_count,
+            "after_count": after_count,
+            "transferred": transferred,
+            "message": f"Pull completed. {transferred} new file(s) downloaded." if not errors else "Pull failed for some platforms.",
+        }
         return result
 
     def push_outgoing(self) -> dict:
         if not self.config.rclone.enabled:
             return {"success": False, "error": "rclone sync is disabled in config"}
-        remote_path = self._remote_path(self.config.rclone.destination_drive_folder)
-        if remote_path is None:
-            return {"success": False, "error": "destination_drive_folder is not configured"}
-        local_path = str(Path(self.config.output_folder))
-        subfolder_template = self.config.rclone.destination_subfolder_template
 
-        if not subfolder_template:
-            pdf_files = sorted(Path(local_path).glob("*.pdf"))
-            if not pdf_files:
-                return {"success": True, "message": "No outgoing files to push"}
-            result = self._run_rclone(["copy", local_path, remote_path])
-            if result["success"]:
-                cleanup = self._cleanup_local_folder(local_path)
-                result["cleanup"] = cleanup
-                result["message"] = f"Push completed. {len(pdf_files)} file(s) uploaded."
-            return result
-
-        output_path = Path(local_path)
+        output_path = Path(self.config.output_folder)
         if not output_path.exists():
             return {"success": True, "message": "No outgoing files to push"}
 
@@ -181,27 +189,43 @@ class SyncService:
         if not pdf_files:
             return {"success": True, "message": "No outgoing files to push"}
 
-        grouped: dict[str, list[Path]] = {}
+        grouped: dict[tuple[str, str], list[Path]] = {}
         for pdf_path in pdf_files:
+            document_type = self._metadata_document_type(pdf_path)
+            rconfig = self.config.rclone_for(document_type)
+            if rconfig.destination_drive_folder is None:
+                continue
             date_str = self._read_metadata_date(pdf_path)
-            subfolder = self._resolve_subfolder(subfolder_template, date_str)
-            grouped.setdefault(subfolder, []).append(pdf_path)
+            subfolder = ""
+            if rconfig.destination_subfolder_template:
+                subfolder = self._resolve_subfolder(rconfig.destination_subfolder_template, date_str)
+            grouped.setdefault((document_type, subfolder), []).append(pdf_path)
+
+        if not grouped:
+            return {"success": True, "message": "No outgoing files to push", "subfolders": {}}
 
         pushed = 0
-        errors = []
+        errors: list[str] = []
         subfolder_counts: dict[str, int] = {}
 
-        for subfolder, files in grouped.items():
-            list_file = self._state_dir() / f"_push_outgoing_{subfolder}.txt"
+        for (document_type, subfolder), files in grouped.items():
+            rconfig = self.config.rclone_for(document_type)
+            remote_path = self._remote_path(rconfig.destination_drive_folder)
+            if remote_path is None:
+                errors.append(f"{document_type}: destination_drive_folder is not configured")
+                continue
+            if subfolder:
+                remote_path = f"{remote_path}/{subfolder}"
+
+            list_file = self._ensure_state_dir() / f"_push_outgoing_{document_type}_{subfolder or 'root'}.txt"
             try:
                 list_file.write_text("\n".join(f.name for f in files), encoding="utf-8")
             except OSError as exc:
-                errors.append(f"{subfolder}: failed to write file list: {exc}")
+                errors.append(f"{document_type}/{subfolder}: failed to write file list: {exc}")
                 continue
 
             try:
-                file_remote_path = f"{remote_path}/{subfolder}"
-                result = self._run_rclone(["copy", "--files-from", str(list_file), local_path, file_remote_path])
+                result = self._run_rclone(["copy", "--files-from", str(list_file), str(output_path), remote_path])
             finally:
                 try:
                     list_file.unlink()
@@ -210,13 +234,14 @@ class SyncService:
 
             if result["success"]:
                 pushed += len(files)
-                subfolder_counts[subfolder] = len(files)
+                label = f"{document_type}/{subfolder}" if subfolder else document_type
+                subfolder_counts[label] = len(files)
             else:
-                errors.append(f"{subfolder}: {result.get('stderr') or result.get('error')}")
+                errors.append(f"{document_type}/{subfolder or 'root'}: {result.get('stderr') or result.get('error')}")
 
         if not errors:
-            cleanup_result = self._cleanup_local_folder(local_path)
-            meta_cleanup_result = self._cleanup_metadata_files(local_path)
+            cleanup_result = self._cleanup_local_folder(str(output_path))
+            meta_cleanup_result = self._cleanup_metadata_files(str(output_path))
         else:
             cleanup_result = {"success": True, "deleted": 0, "errors": []}
             meta_cleanup_result = {"success": True, "deleted": 0, "errors": []}
@@ -224,7 +249,7 @@ class SyncService:
         return {
             "success": not errors,
             "pushed": pushed,
-            "message": f"Push completed. {pushed} file(s) uploaded." if not errors else "Push failed for some subfolders.",
+            "message": f"Push completed. {pushed} file(s) uploaded." if not errors else "Push failed for some platforms.",
             "subfolders": subfolder_counts,
             "errors": errors,
             "cleanup": cleanup_result,
@@ -268,29 +293,44 @@ class SyncService:
         if not processed:
             return {"success": True, "message": "No processed files to clear", "deleted": 0}
 
-        remote_path = self._remote_path(self.config.rclone.source_drive_folder)
-        if remote_path is None:
-            return {"success": False, "error": "source_drive_folder is not configured"}
+        remote_targets: list[tuple[str, str]] = []
+        for document_type in self.config.platform_types():
+            rconfig = self.config.rclone_for(document_type)
+            remote_path = self._remote_path(rconfig.source_drive_folder)
+            if remote_path is not None:
+                remote_targets.append((document_type, remote_path))
 
-        list_file = self._state_dir() / "_clear_input_files.txt"
+        if not remote_targets:
+            return {"success": False, "error": "source_drive_folder is not configured for any platform"}
+
+        list_file = self._ensure_state_dir() / "_clear_input_files.txt"
         try:
             list_file.write_text("\n".join(processed), encoding="utf-8")
         except OSError as exc:
             return {"success": False, "error": f"Failed to write file list: {exc}"}
 
-        try:
-            result = self._run_rclone(["delete", "--files-from", str(list_file), remote_path])
-        finally:
-            try:
-                list_file.unlink()
-            except OSError:
-                pass
+        errors: list[str] = []
+        platform_results: dict[str, bool] = {}
 
-        if not result["success"]:
+        for document_type, remote_path in remote_targets:
+            try:
+                result = self._run_rclone(["delete", "--files-from", str(list_file), remote_path])
+            finally:
+                if list_file.is_file():
+                    try:
+                        list_file.unlink()
+                    except OSError:
+                        pass
+            platform_results[document_type] = result["success"]
+            if not result["success"]:
+                errors.append(f"{document_type}: {result.get('stderr') or result.get('error') or 'Unknown error'}")
+
+        if errors:
             return {
                 "success": False,
                 "deleted": 0,
-                "errors": [result.get("stderr") or result.get("error") or "Unknown error"],
+                "platforms": platform_results,
+                "errors": errors,
             }
 
         try:
@@ -299,16 +339,30 @@ class SyncService:
             return {
                 "success": True,
                 "deleted": len(processed),
+                "platforms": platform_results,
                 "errors": [f"Failed to remove state file: {exc}"],
             }
 
         return {
             "success": True,
             "deleted": len(processed),
+            "platforms": platform_results,
             "errors": [],
         }
 
     def status(self) -> dict:
+        platforms = []
+        for document_type in self.config.platform_types():
+            rconfig = self.config.rclone_for(document_type)
+            platforms.append({
+                "document_type": document_type,
+                "enabled": rconfig.enabled,
+                "remote": rconfig.remote,
+                "source_drive_folder": rconfig.source_drive_folder,
+                "destination_drive_folder": rconfig.destination_drive_folder,
+                "destination_subfolder_template": rconfig.destination_subfolder_template,
+                "archive_drive_folder": rconfig.archive_drive_folder,
+            })
         return {
             "enabled": self.config.rclone.enabled,
             "remote": self.config.rclone.remote,
@@ -316,6 +370,7 @@ class SyncService:
             "destination_drive_folder": self.config.rclone.destination_drive_folder,
             "destination_subfolder_template": self.config.rclone.destination_subfolder_template,
             "archive_drive_folder": self.config.rclone.archive_drive_folder,
+            "platforms": platforms,
             "rclone_available": self._rclone_available(),
             "input_folder": self.config.input_folder,
             "output_folder": self.config.output_folder,

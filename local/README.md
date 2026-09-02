@@ -44,7 +44,7 @@ Docling consistently hit `std::bad_alloc` errors during layout preprocessing on 
   "archive_folder": "local/data/archive",
   "log_file": "local/data/logs/parse_and_rename.log",
   "timezone": "Asia/Hong_Kong",
-  "default_document_type": "googleadsinvoice",
+  "default_document_type": "google_ads",
 
   "features": {
     "archive": true,
@@ -71,6 +71,37 @@ Docling consistently hit `std::bad_alloc` errors during layout preprocessing on 
 - `features`: global processing behaviour.
 - `filename`: global manual-review prefix, already-processed patterns, and collision suffix.
 
+### Platforms (per-document-type routing)
+
+Since invoices are classified into document types, the app can route each platform's files and reports independently while sharing one workflow:
+
+* **Pull** — copies each platform's `source_drive_folder` into the shared `incoming/` (`rclone copy`, so platforms never overwrite each other).
+* **Push** — reads each renamed PDF's `.meta.json` `document_type`, resolves that platform's `destination_drive_folder`, and groups into its `{year}{month}` subfolder.
+* **Clear remote input** — deletes the processed list from each platform's `source_drive_folder`.
+* **Reports** — preview documents are grouped by `document_type` and written to that platform's Google Sheets workbook.
+
+The optional top-level `platforms` map holds per-type `rclone` and `google_sheets` overlays that merge on top of the top-level defaults (which remain the `google_ads`/default configuration):
+
+```json
+{
+  "platforms": {
+    "facebook": {
+      "rclone": {
+        "source_drive_folder": "003 Finance Operations/001 Invoices/002 Meta Ads/000 Input Folder",
+        "destination_drive_folder": "003 Finance Operations/001 Invoices/002 Meta Ads",
+        "destination_subfolder_template": "{year}{month}",
+        "archive_drive_folder": null
+      },
+      "google_sheets": {
+        "spreadsheet_url": "https://docs.google.com/spreadsheets/d/YOUR_META_SPREADSHEET_ID/edit"
+      }
+    }
+  }
+}
+```
+
+Only fields explicitly set in a platform block override the top-level defaults (`enabled`, `service_account_file`, etc. inherit from the base). The service account must be granted **Editor** access on each platform's spreadsheet.
+
 ### Document types
 
 Each entry under `document_types` describes how to recognise and parse one kind of document:
@@ -78,7 +109,7 @@ Each entry under `document_types` describes how to recognise and parse one kind 
 ```json
 {
   "document_types": {
-    "googleadsinvoice": {
+    "google_ads": {
       "classifier": {
         "patterns": ["Invoice", "Invoice number", "Invoice date"]
       },
@@ -160,10 +191,12 @@ Each entry under `document_types` describes how to recognise and parse one kind 
       "manual_review_for_missing": ["account", "date"],
       "report_columns": {
         "account": "Client Ref.",
+        "account_id": "Account ID",
         "date": "PDF Invoice Date",
         "number": "PDF Invoice No.",
         "currency": "Topped Currency",
-        "total": "Topped amount"
+        "total": "Topped amount",
+        "platform": "Platform"
       }
     }
   }
@@ -177,8 +210,14 @@ Per-document-type sections:
 - `filename_template`: output filename pattern; supports `{account}`, `{account_id}`, `{number}`, `{date}`, `{total}`, `{currency}`.
 - `placeholders`: fallback values and sanitisation flags used when building the filename.
 - `manual_review_for_missing`: fields that must be present; missing any triggers the manual-review prefix.
-- `report_columns`: maps fields to fixed CSV/Google Sheets column headers.
+- `report_columns`: maps fields to fixed CSV/Google Sheets column headers. Map `account_id` to the **Account ID** column and `platform` to the **Platform** column (which reports the classified document type, e.g. `google_ads`, `facebook`) in CSV/Sheets output.
 - `accounts`: a structured breakdown written to the `.meta.json` sidecar only (not used in filenames or reports). It parses the "Summary of costs by account budget" table for multi-account invoices, aggregates budget rows by account ID, and falls back to a single account record with the invoice total when no such table exists.
+
+Document types shipped in `local_config.example.json`:
+- `google_ads` — Google Ads invoices (`Account:`, `Invoice number`, `Summary of costs by account budget`).
+- `facebook` — Meta (Facebook/Meta Platforms) ads invoices (`Invoice #`, `Account Id / Group`, `PO Number`, `Invoice Total`).
+
+Both types map `account_id → Account ID` and `platform → Platform` in `report_columns`, so the report's **Account ID** column shows the digits-only account ID and the **Platform** column shows the document type (`google_ads` / `facebook`).
 
 ### Total parser
 
@@ -250,7 +289,8 @@ Configuration lives in the `nocodb` section of `local_config.json`:
       "date": "pdf_invoice_date",
       "total": "topped_amount",
       "currency": "currency",
-      "source": "source"
+      "source": "source",
+      "document_type": "invoice_type"
     }
   }
 }
@@ -264,6 +304,7 @@ Environment variables (gitignored, in `.env`):
 Notes:
 
 - `source` is a dropdown column in NocoDB; the app does not parse a source value yet, so it is uploaded as empty.
+- The classified document type is written to each sidecar as `document_type` and uploaded to the `invoice_type` column.
 - Use `--dry-run` first to confirm the payload mapping before uploading for real.
 
 ## Web UI

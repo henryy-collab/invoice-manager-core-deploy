@@ -21,16 +21,53 @@ class SheetsService:
         if not self.config.google_sheets.enabled:
             return {"success": True, "skipped": True, "message": "Google Sheets reporting is disabled."}
 
-        documents = [Document(**r.fields) for r in results if not r.needs_manual_review]
+        documents = [
+            Document(document_type=r.document_type, **r.fields)
+            for r in results if not r.needs_manual_review
+        ]
         if not documents:
             return {"success": True, "skipped": True, "message": "No processed invoices to report."}
 
-        config = self.config.model_copy(deep=True)
-        gs = config.google_sheets
-        if gs.service_account_file and not Path(gs.service_account_file).is_absolute():
-            gs.service_account_file = str(self._project_root() / gs.service_account_file)
+        grouped: dict[str, list] = {}
+        for document in documents:
+            grouped.setdefault(document.document_type, []).append(document)
 
-        return append_invoice_rows(documents, config, overwrite=overwrite)
+        total_written = 0
+        total_updated = 0
+        sheet_counts: dict[str, dict] = {}
+        errors: list[str] = []
+
+        for document_type, group in grouped.items():
+            config = self.config.model_copy(deep=True)
+            gs = config.google_sheets_for(document_type)
+            if gs.service_account_file and not Path(gs.service_account_file).is_absolute():
+                gs.service_account_file = str(self._project_root() / gs.service_account_file)
+            config.google_sheets = gs
+            result = append_invoice_rows(group, config, overwrite=overwrite)
+            if result.get("success"):
+                total_written += result.get("written", 0)
+                total_updated += result.get("updated", 0)
+                sheet_counts[document_type] = result
+            else:
+                errors.append(f"{document_type}: {result.get('error', 'unknown error')}")
+
+        if not sheet_counts:
+            return {"success": False, "error": " ".join(errors)}
+
+        message_parts = [f"Wrote {total_written} row(s) across {len(sheet_counts)} platform type(s)."]
+        if total_updated:
+            message_parts.append(f"Updated {total_updated} existing row(s).")
+        if errors:
+            message_parts.append("Errors: " + " ".join(errors))
+
+        return {
+            "success": not errors,
+            "written": total_written,
+            "updated": total_updated,
+            "sheets": sheet_counts,
+            "errors": errors,
+            "message": " ".join(message_parts),
+        }
 
     def write_last_preview_results(self, parse_service: ParseService | None = None, overwrite: bool = False) -> dict:
         if parse_service is None:
