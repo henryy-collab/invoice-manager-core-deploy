@@ -1,9 +1,11 @@
 from pathlib import Path
 from typing import Optional
+import json
 
 from fastapi import Request
 
 from invoice_parser.config import AppConfig, resolve_config_paths
+from invoice_parser.config_loader import load_config_source, resolve_config_path
 from invoice_parser.logging import setup_logging
 from invoice_ui.config import UIConfig
 
@@ -13,24 +15,7 @@ def get_ui_config() -> UIConfig:
 
 
 def resolve_default_config_path() -> Path:
-    import os
-
-    ui_config = get_ui_config()
-    if env_path := os.getenv(ui_config.config_path_env):
-        candidate = Path(env_path).resolve()
-        if candidate.exists():
-            return candidate
-        raise FileNotFoundError(f"Config path from {ui_config.config_path_env} not found: {candidate}")
-
-    # Repo root is two levels above ui/invoice_ui/
-    repo_root = Path(__file__).resolve().parent.parent.parent
-    candidate = repo_root / "local" / "local_config.json"
-    if candidate.exists():
-        return candidate
-
-    raise FileNotFoundError(
-        "Could not find local/local_config.json. Use INVOICE_UI_CONFIG_PATH to specify its location."
-    )
+    return resolve_config_path()
 
 
 def _resolve_config_path(request: Request) -> Path:
@@ -42,12 +27,11 @@ def get_config_path(request: Request) -> Path:
 
 
 def load_app_config_from_path(config_path: Path) -> AppConfig:
-    import json
-
+    from invoice_parser.config_loader import load_config_source
     from pydantic import ValidationError
 
     try:
-        raw = json.loads(config_path.read_text(encoding="utf-8"))
+        _, raw = load_config_source(config_path)
         config = AppConfig.model_validate(raw)
         return resolve_config_paths(config, config_path)
     except json.JSONDecodeError as exc:

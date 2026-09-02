@@ -82,7 +82,7 @@ class ParseService:
                 results.append(ParseResultItem(
                     source_name=pdf_path.name,
                     source_path=str(pdf_path),
-                    fields={"account": None, "number": None, "date": None, "total": None, "currency": None},
+                    fields={"account": None, "account_id": None, "number": None, "date": None, "total": None, "currency": None},
                     missing_required=[],
                     target_name=pdf_path.name,
                     needs_manual_review=True,
@@ -211,7 +211,7 @@ class ParseService:
                 if item.needs_manual_review:
                     rename_pdf(pdf_path, target, dry_run, self.logger, "MANUAL_REVIEW")
                     if not dry_run:
-                        write_metadata_file(target, Document(**item.fields))
+                        write_metadata_file(target, Document(document_type=item.document_type, **item.fields))
                     manual_review.append(item.source_name)
                     continue
 
@@ -220,7 +220,7 @@ class ParseService:
 
                 rename_pdf(pdf_path, target, dry_run, self.logger)
                 if not dry_run:
-                    write_metadata_file(target, Document(**item.fields))
+                    write_metadata_file(target, Document(document_type=item.document_type, **item.fields))
                 processed.append(item.source_name)
             except Exception as exc:
                 log_info(self.logger, "PROCESS_FAILED", {"file": item.source_name, "error": str(exc)})

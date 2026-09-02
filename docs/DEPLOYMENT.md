@@ -21,23 +21,25 @@ Deploy Invoice Manager Core to Coolify using Docker Compose from the GitHub repo
 
 This gives full control over when each version is deployed.
 
-## Step 1: Provide the secrets as environment variables
+## Step 1: Provide the secrets as environment variables (optional)
 
-The container reads three files from environment variables because Coolify already has them configured for the existing resource.
+The container reads three files from environment variables. All are now **optional** — the app boots with the bundled example config (reachable UI, editable) even if none are set. Set them for full functionality.
 
 | Variable | Value |
 |---|---|
-| `SERVICE_ACCOUNT_JSON` | The full contents of `connect-ai-pc-fad7ca673e19.json` (base64-encoded by the existing entrypoint) |
+| `SERVICE_ACCOUNT_JSON` | The full contents of `connect-ai-pc-fad7ca673e19.json` (raw JSON, or base64-encoded via `SERVICE_ACCOUNT_JSON_B64`) |
 | `APP_CONFIG_JSON` | The full contents of `local/local_config.json` as plain JSON |
-| `RCLONE_CONF` | The full contents of `rclone.conf` with newlines replaced by `\|` pipe characters |
+| `RCLONE_CONF` | The full contents of `rclone.conf` with newlines replaced by `\|` pipe characters (or base64 via `RCLONE_CONF_B64`) |
+| `NOCODB_TOKEN` | NocoDB API token (used by the `upload_nocodb.py` CLI, `xc-token` header) |
+| `NOCODB_URL` | NocoDB base URL (default `http://localhost:3000`). For a deployed container use a URL reachable from the server, not `localhost`. |
 
-The `RCLONE_CONF` pipe format is used because multi-line values are hard to paste into some Coolify environments. For example:
+The `RCLONE_CONF` pipe format is used because multi-line values are hard to paste into some deployment environments. For example:
 
 ```
 [mydrive-service]\ntype = drive\nscope = drive\nservice_account_file = /app/keys/connect-ai-pc-fad7ca673e19.json
 ```
 
-Do not change these variables if the existing deployment already works.
+Secrets are materialized to disk at startup by `deploy/bootstrap.py`. If a variable is missing, the app logs a warning and continues instead of failing to boot.
 
 ## Step 2: Ensure the Coolify resource is configured
 
@@ -65,9 +67,10 @@ This keeps incoming PDFs, outgoing PDFs, logs, reports, and state across redeplo
 ## Step 5: Deploy and verify
 
 1. Click **Deploy** or **Start**.
-2. Watch the deploy logs. You should see:
+2. Watch the deploy logs. With `APP_CONFIG_JSON` set you should see:
+   - `Service-account key written from environment` (if `SERVICE_ACCOUNT_JSON` set)
    - `App config written from APP_CONFIG_JSON`
-   - `Repairing config from env var...`
+   - `Repairing config from env var...` (if the app config came from the env var)
    - `Config repaired successfully.`
 3. Visit the domain or `/health` and confirm the response:
    ```json
@@ -100,18 +103,20 @@ To roll back to a previous version, change the tag in Coolify from the new tag b
 
 ## Common failures
 
-### Container fails to start
+### Container starts but warnings appear in logs
 
-Check the deployment logs for these warnings:
+The app now boots even without secrets, so missing env vars produce warnings rather than a crash:
 
-- `WARNING: No app config mounted or provided` — `APP_CONFIG_JSON` is missing.
-- `WARNING: No rclone config mounted or provided` — `RCLONE_CONF` is missing.
-- `WARNING: No service-account key mounted or provided` — `SERVICE_ACCOUNT_JSON` is missing.
+- `WARNING: No app config mounted or provided` — `APP_CONFIG_JSON` is missing. The app uses the bundled example config, which is functional for preview/rename but has Google Sheets and rclone disabled.
+- `WARNING: No rclone config mounted or provided` — `RCLONE_CONF` is missing. rclone sync will be unavailable.
+- `WARNING: No service-account key mounted or provided` — `SERVICE_ACCOUNT_JSON` is missing. Google Sheets reporting will be unavailable.
+
+Set the corresponding env var and redeploy to enable the feature.
 
 ### Health check fails
 
 - Confirm the port is `8000` and the path is `/health`.
-- Confirm the container finished starting and is not in a crash loop.
+- Confirm the container finished starting and is not in a crash loop. A crash loop now indicates a real bug (e.g. invalid `APP_CONFIG_JSON`), not a missing secret.
 
 ### Drive folder not found
 

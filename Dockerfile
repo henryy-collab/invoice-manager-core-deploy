@@ -23,8 +23,8 @@ ENV PYTHONPATH=/app/local:/app/ui \
 EXPOSE 8000
 
 COPY deploy/entrypoint.sh /entrypoint.sh
-COPY deploy/repair_config.py /repair_config.py
-RUN chmod +x /entrypoint.sh /repair_config.py
+COPY deploy/bootstrap.py /bootstrap.py
+RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["python", "ui/web_ui.py"]

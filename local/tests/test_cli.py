@@ -24,14 +24,19 @@ def test_resolve_config_path_from_args(tmp_path):
     assert _resolve_config_path(config) == config
 
 
-def test_resolve_config_path_no_config_raises(tmp_path, monkeypatch):
+def test_resolve_config_path_no_config_falls_back(tmp_path, monkeypatch):
     # Ensure no real local_config.json is found by monkeypatching cli.__file__ to a temp dir
     import invoice_parser.cli as cli_module
+    from invoice_parser import config_loader
+
     monkeypatch.setattr(
         cli_module, "__file__", str(tmp_path / "invoice_parser" / "cli.py")
     )
-    with pytest.raises(FileNotFoundError):
-        _resolve_config_path(None)
+    monkeypatch.setattr(
+        config_loader, "__file__", str(tmp_path / "invoice_parser" / "config_loader.py")
+    )
+    path = _resolve_config_path(None)
+    assert path.name == "local_config.example.json"
 
 
 def test_main_exits_on_missing_test_file(tmp_path, monkeypatch):

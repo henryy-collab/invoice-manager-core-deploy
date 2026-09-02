@@ -14,5 +14,5 @@ class UIConfig(BaseModel):
         import os
 
         host = os.getenv("INVOICE_UI_HOST", "0.0.0.0")
-        port = int(os.getenv("INVOICE_UI_PORT", "8000"))
+        port = int(os.getenv("INVOICE_UI_PORT") or os.getenv("PORT") or "8000")
         return cls(host=host, port=port)

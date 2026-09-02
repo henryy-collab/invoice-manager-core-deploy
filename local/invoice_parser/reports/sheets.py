@@ -10,6 +10,7 @@ from invoice_parser.models import Document, Invoice
 
 HEADER_COLUMNS = [
     "Client Ref.",
+    "Account ID",
     "Platform",
     "Agreed Amount",
     "Invoice No.",
@@ -25,6 +26,7 @@ HEADER_COLUMNS = [
     "Topped Currency",
     "Topped amount",
     "Balance",
+    "Invoice Type",
 ]
 
 _SHEET_WARNING = "COPY THIS SHEET FIRST, THEN DELETE [AUTO]. DO NOT EDIT DIRECTLY — IT BREAKS AUTOMATION."
@@ -78,6 +80,8 @@ def _format_row(document: Document, type_config: DocumentTypeConfig, config: Goo
             continue
 
         value = document.get(field)
+        if field in ("document_type", "platform"):
+            value = document.document_type
 
         if column == "PDF Invoice Date":
             date_value = _parse_date(value, config.date_format)
@@ -113,13 +117,19 @@ def _find_header_column_index(values: list[list[Any]], column_name: str) -> int 
     return None
 
 
-def _map_existing_rows(values: list[list[Any]], column_index: int) -> dict[str, int]:
+def _map_existing_rows(values: list[list[Any]], column_index: int | None = None) -> dict[str, int]:
     existing: dict[str, int] = {}
     for i, row in enumerate(values):
         if i in (0, 1):
             continue
-        if len(row) > column_index and row[column_index]:
-            existing[str(row[column_index])] = i + 1
+        if column_index is not None:
+            if len(row) > column_index and row[column_index]:
+                existing[str(row[column_index])] = i + 1
+        else:
+            for cell in row:
+                cell_str = str(cell)
+                if cell_str:
+                    existing.setdefault(cell_str, i + 1)
     return existing
 
 
@@ -224,7 +234,7 @@ def _format_warning(spreadsheet, worksheet):
 def _ensure_headers(worksheet, spreadsheet) -> list[list[Any]]:
     values = worksheet.get_all_values()
 
-    has_warning = bool(values) and values[0] == [_SHEET_WARNING]
+    has_warning = bool(values) and bool(values[0]) and values[0][0] == _SHEET_WARNING
     has_header = bool(values) and len(values) > 1 and values[1] == HEADER_COLUMNS
 
     if has_warning and has_header:
@@ -237,17 +247,26 @@ def _ensure_headers(worksheet, spreadsheet) -> list[list[Any]]:
         _format_warning(spreadsheet, worksheet)
         return [[_SHEET_WARNING], HEADER_COLUMNS]
 
+    # Auto tab with data but a stale header: align the header row so future
+    # appends line up with HEADER_COLUMNS. Existing rows are matched by key
+    # scan, so this stays safe even when legacy rows are shorter than the new
+    # column layout.
+    if has_warning and len(values) > 1:
+        worksheet.update("A2", [HEADER_COLUMNS], value_input_option="USER_ENTERED")
+        values[1] = list(HEADER_COLUMNS)
+
     return values
 
 
 def _resolve_key_column_index(
-    values: list[list[Any]],
     type_config: DocumentTypeConfig,
 ) -> int | None:
     target_column = type_config.report_columns.get("number")
     if target_column is None:
         return None
-    return _find_header_column_index(values, target_column)
+    if target_column not in HEADER_COLUMNS:
+        return None
+    return HEADER_COLUMNS.index(target_column)
 
 
 def _upsert_to_sheet(
@@ -281,14 +300,15 @@ def _upsert_to_sheet(
     for document in documents:
         type_config = config.document_types.get(document.document_type, default_type_config)
         if key_column_index is None:
-            key_column_index = _resolve_key_column_index(values, type_config)
-            if key_column_index is not None and not overwrite:
-                existing_rows = _map_existing_rows(values, key_column_index)
+            key_column_index = _resolve_key_column_index(type_config)
+            if not overwrite:
+                existing_rows = _map_existing_rows(values)
 
         row = _format_row(document, type_config, gs_config)
-        key_value = document.get("number") or "" if key_column_index is None else ""
         if key_column_index is not None and len(row) > key_column_index:
             key_value = str(row[key_column_index])
+        else:
+            key_value = document.get("number") or ""
 
         if key_value and key_value in existing_rows and not overwrite:
             row_number = existing_rows[key_value]

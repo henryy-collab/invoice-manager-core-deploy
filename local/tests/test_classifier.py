@@ -18,12 +18,12 @@ def test_classify_document_returns_default_when_no_match():
 def test_classify_document_matches_default_type():
     config = _build_config()
     text = "Invoice number: 12345\nInvoice date: 2024-01-01"
-    assert classify_document(text, config.document_types, config.default_document_type) == "googleadsinvoice"
+    assert classify_document(text, config.document_types, config.default_document_type) == "google_ads"
 
 
 def test_classify_document_prefers_type_with_more_matches():
     config = _build_config({
-        "googleadsinvoice": {
+        "google_ads": {
             "classifier": {"patterns": ["Invoice"]},
             "fields": {},
         },
@@ -39,7 +39,7 @@ def test_classify_document_prefers_type_with_more_matches():
 
 def test_classify_document_falls_back_to_default_on_tie():
     config = _build_config({
-        "googleadsinvoice": {
+        "google_ads": {
             "classifier": {"patterns": ["Document"]},
             "fields": {},
         },

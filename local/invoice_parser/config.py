@@ -86,6 +86,26 @@ class AccountParserConfig(BaseModel):
     fallback: str = "UNKNOWN"
 
 
+class AccountsParserConfig(BaseModel):
+    summary_marker_regex: str = r"Summary\s+of\s+costs\s+by\s+account\s+budget"
+    amount_header_regex: str = r"^Amount\s*\(?[A-Z$€£¥]*\)?$"
+    account_line_regex: str = r"Account:\s*(.+?)(?=\s*\[|\s*$)"
+    account_id_line_regex: str = r"Account\s*ID[:\s]+([\d\-]+)"
+    total_label_regex: str = r"(Total\s*amount\s*due\s*in|Total\s+in)\s+[A-Z]{3}"
+    amount_regex: str = r"(-?)(?:HK\$|US\$|\$|€|£|¥|SGD|HKD|USD|AUD|GBP|EUR|JPY)?\s*(-?[\d,]+\.\d{2})"
+    id_lookahead: int = 4
+    name_max_lines: int = 3
+
+    @field_validator("summary_marker_regex", "amount_header_regex", "account_line_regex", "account_id_line_regex", "total_label_regex", "amount_regex")
+    @classmethod
+    def regex_must_compile(cls, v: str) -> str:
+        try:
+            re.compile(v)
+        except re.error as exc:
+            raise ValueError(f"Invalid regex: {exc}")
+        return v
+
+
 class NumberParserConfig(BaseModel):
     patterns: list[RegexPattern] = Field(default_factory=list)
     require_digit: bool = True
@@ -156,10 +176,18 @@ class ParsersConfig(BaseModel):
     account: AccountParserConfig = Field(default_factory=lambda: AccountParserConfig(
         patterns=[
             RegexPattern(regex=r"^Account:\s*(.+?)(?=\s*\[|\s*$)", flags=["IGNORECASE", "MULTILINE"]),
-            RegexPattern(regex=r"Account\s*ID[:\s]+([\d\-]+)", flags=["IGNORECASE"]),
         ],
         unknown_values=["-", "—", "--", "N/A", "n/a"],
     ))
+    account_id: AccountParserConfig = Field(default_factory=lambda: AccountParserConfig(
+        patterns=[
+            RegexPattern(regex=r"Account:\s*[^\[]*?\[([\d\-]+)\]", flags=["IGNORECASE"]),
+            RegexPattern(regex=r"Account\s*ID[:\s]+([\d\-]+)", flags=["IGNORECASE"]),
+        ],
+        unknown_values=["-", "—", "--", "N/A", "n/a"],
+        fallback="UNKNOWN",
+    ))
+    accounts: AccountsParserConfig = Field(default_factory=AccountsParserConfig)
     number: NumberParserConfig = Field(default_factory=lambda: NumberParserConfig(
         patterns=[
             RegexPattern(regex=r"Invoice\s*number[:\s]+([A-Z0-9\-]+)", flags=["IGNORECASE"]),
@@ -202,6 +230,7 @@ class PlaceholderConfig(BaseModel):
 class FilenameConfig(BaseModel):
     placeholders: dict[str, PlaceholderConfig] = Field(default_factory=lambda: {
         "account": PlaceholderConfig(sanitize=True, fallback="UNKNOWN"),
+        "account_id": PlaceholderConfig(sanitize=True, fallback="unknown"),
         "number": PlaceholderConfig(sanitize=True, fallback="unknown"),
         "date": PlaceholderConfig(fallback="unknown-date"),
         "total": PlaceholderConfig(fallback="unknown"),
@@ -219,6 +248,7 @@ class FilenameConfig(BaseModel):
     def ensure_default_placeholders(self):
         defaults = {
             "account": PlaceholderConfig(sanitize=True, fallback="UNKNOWN"),
+            "account_id": PlaceholderConfig(sanitize=True, fallback="unknown"),
             "number": PlaceholderConfig(sanitize=True, fallback="unknown"),
             "date": PlaceholderConfig(fallback="unknown-date"),
             "total": PlaceholderConfig(fallback="unknown"),
@@ -260,6 +290,7 @@ class DocumentTypeConfig(BaseModel):
     def ensure_default_placeholders(self):
         defaults = {
             "account": PlaceholderConfig(sanitize=True, fallback="UNKNOWN"),
+            "account_id": PlaceholderConfig(sanitize=True, fallback="unknown"),
             "number": PlaceholderConfig(sanitize=True, fallback="unknown"),
             "date": PlaceholderConfig(fallback="unknown-date"),
             "total": PlaceholderConfig(fallback="unknown"),
@@ -304,6 +335,47 @@ class GoogleSheetsConfig(BaseModel):
         return v
 
 
+class PlatformConfig(BaseModel):
+    rclone: RcloneConfig | None = None
+    google_sheets: GoogleSheetsConfig | None = None
+
+    def _overlay_values(self, mine, cls) -> dict:
+        defaults = cls().model_dump()
+        return {
+            key: value
+            for key, value in mine.model_dump().items()
+            if value != defaults.get(key)
+        }
+
+    def merged_rclone(self, base: RcloneConfig) -> RcloneConfig:
+        data = base.model_dump()
+        if self.rclone is not None:
+            data.update(self._overlay_values(self.rclone, RcloneConfig))
+        return RcloneConfig.model_validate(data)
+
+    def merged_google_sheets(self, base: GoogleSheetsConfig) -> GoogleSheetsConfig:
+        data = base.model_dump()
+        if self.google_sheets is not None:
+            data.update(self._overlay_values(self.google_sheets, GoogleSheetsConfig))
+        return GoogleSheetsConfig.model_validate(data)
+
+
+class NocoDBConfig(BaseModel):
+    enabled: bool = False
+    base_id: str = ""
+    table_id: str = ""
+    column_map: dict[str, str] = Field(default_factory=lambda: {
+        "account": "ad_account_name",
+        "account_id": "account_id",
+        "number": "pdf_invoice_number",
+        "date": "pdf_invoice_date",
+        "total": "topped_amount",
+        "currency": "currency",
+        "source": "source",
+        "document_type": "invoice_type",
+    })
+
+
 class AppConfig(BaseModel):
     source_folder: str
     filename_template: str = "{account}_{number}_Invoice_{date}.pdf"
@@ -322,6 +394,30 @@ class AppConfig(BaseModel):
     rclone: RcloneConfig = Field(default_factory=RcloneConfig)
     reports: ReportsConfig = Field(default_factory=ReportsConfig)
     google_sheets: GoogleSheetsConfig = Field(default_factory=GoogleSheetsConfig)
+    nocodb: NocoDBConfig = Field(default_factory=NocoDBConfig)
+    platforms: dict[str, PlatformConfig] = Field(default_factory=dict)
+
+    def _platform(self, document_type: str) -> PlatformConfig | None:
+        return self.platforms.get(document_type)
+
+    def rclone_for(self, document_type: str) -> RcloneConfig:
+        platform = self._platform(document_type)
+        if platform is not None:
+            return platform.merged_rclone(self.rclone)
+        return self.rclone
+
+    def google_sheets_for(self, document_type: str) -> GoogleSheetsConfig:
+        platform = self._platform(document_type)
+        if platform is not None:
+            return platform.merged_google_sheets(self.google_sheets)
+        return self.google_sheets
+
+    def platform_types(self) -> list[str]:
+        configured = [dt for dt, p in self.platforms.items() if p is not None]
+        default = self.default_document_type
+        if default not in configured:
+            configured.insert(0, default)
+        return configured
 
     @model_validator(mode="after")
     def migrate_flat_config_to_document_types(self):
@@ -333,7 +429,7 @@ class AppConfig(BaseModel):
         features = self.features
 
         fields = {}
-        for name, parser_name in [("account", "account"), ("number", "number"), ("date", "date"), ("currency", "currency"), ("total", "total")]:
+        for name, parser_name in [("account", "account"), ("account_id", "account_id"), ("accounts", "accounts"), ("number", "number"), ("date", "date"), ("currency", "currency"), ("total", "total")]:
             parser_config = getattr(parsers, name, None)
             field_config = {"parser": parser_name}
             if parser_config is not None:
@@ -348,10 +444,12 @@ class AppConfig(BaseModel):
             "manual_review_for_missing": features.manual_review_for_missing,
             "report_columns": {
                 "account": "Client Ref.",
+                "account_id": "Account ID",
                 "date": "PDF Invoice Date",
                 "number": "PDF Invoice No.",
                 "currency": "Topped Currency",
                 "total": "Topped amount",
+                "platform": "Platform",
             },
         }
 

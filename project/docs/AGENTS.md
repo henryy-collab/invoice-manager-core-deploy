@@ -137,6 +137,14 @@ When implementing anything new, follow this approach:
    - No commits unless explicitly asked.
    - No large refactors without discussion.
    - Keep changes minimal and focused on the task.
+9. Working with subagents
+   - Break large tasks into small, independent parts instead of one big prompt.
+   - Split by responsibility, not by file; each part has one job.
+   - Each part must be independently verifiable (its own test or a concrete check).
+   - Subagents start with fresh context — pack each prompt with file paths, conventions, acceptance criteria, and the verify command.
+   - The orchestrating session keeps the overall flow, cross-cutting docs, and all commits; subagents only implement and verify their part.
+   - Re-run both test suites after integrating subagent output; never accept a part that breaks a suite.
+   - Keep parts focused; no doc changes or refactors outside a part's assigned scope.
 
 ## Style conventions
 - No comments unless asked.
@@ -205,7 +213,11 @@ See `docs/CHANGELOG.md` for a full history of merged features.
 - Deployment mirror repo: `FirstPage-Glass/invoice-manager-core`.
 - Coolify auto-deploys from the deployment mirror's `master` branch.
 - Google Sheets reporting is configured under `google_sheets` in `local_config.json`. Enable it and set `spreadsheet_url` to append processed invoice details to monthly tabs based on invoice date. The Google Sheets API must be enabled in the same Cloud project.
-- Document types are configured under `document_types`; the default type is `googleadsinvoice`.
+- Document types are configured under `document_types`; the default type is `google_ads`.
+- The parser captures the account **name** (`account`) and the numeric account **ID** (`account_id`) as separate fields. `account_id` is stored **digits-only** (dashes stripped, e.g. `802-155-0535` → `8021550535`) so it is a single canonical unique identifier. It is parsed from the bracketed form (`Account: Name [12345]`) or a standalone `Account ID: 12345` line, flows into parse results and `.meta.json` sidecars, and is available as the `{account_id}` filename placeholder. It is not yet mapped into CSV/Google Sheets report columns.
+- A per-account breakdown (`accounts`) is parsed and written to the `.meta.json` sidecar as a JSON array of `{account, account_id, amount}` records. Multi-account invoices (consolidated HKCT) are parsed from the "Summary of costs by account budget" table and aggregated by account ID; single-account invoices produce one record with the invoice total. It is not used in filenames or reports. Configured under `parsers.accounts` / `document_types.*.fields.accounts`.
+- The classified invoice type (`document_type`, e.g. `google_ads`, `facebook`) is reported alongside each invoice: it is written to every `.meta.json` sidecar, uploaded to the NocoDB `invoice_type` column, and appears in the **Invoice Type** column of the Google Sheets report and CSV export when a type's `report_columns` maps `document_type` to that column.
+- **`GET /api/accounts`** is a separate endpoint (independent of the parse/preview/report flow) that returns an aggregated, account-keyed data array. It is **scoped to the latest run by default**: it reads `state/last_run_processed.json` (the `processed` list) and parses only that run's archived PDFs; `?scope=all` opts back into scanning the whole archive, and `?folder=` overrides the source directory (default `config.archive_folder`). It lives in `ui/invoice_ui/services/accounts_service.py` and `ui/invoice_ui/routers/accounts_router.py`.
 
 ### Known quirks
 

@@ -1,7 +1,7 @@
 from typing import Optional
 
 
-DEFAULT_DOCUMENT_TYPE = "googleadsinvoice"
+DEFAULT_DOCUMENT_TYPE = "google_ads"
 
 
 class Document:

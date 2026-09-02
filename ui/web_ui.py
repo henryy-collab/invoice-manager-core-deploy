@@ -7,8 +7,14 @@ from invoice_ui.dependencies import load_app_config_from_path, resolve_default_c
 
 
 def ensure_app_directories(config_path: Path) -> None:
-    """Create directories referenced by the app config if they do not exist."""
-    if not config_path.exists():
+    """Create directories referenced by the app config if they do not exist.
+
+    Skips directory creation when the resolved source is the read-only example
+    config, so the app can always boot to a reachable UI.
+    """
+    from invoice_parser.config_loader import example_config_path
+
+    if not config_path.exists() and config_path != example_config_path():
         return
     app_config = load_app_config_from_path(config_path)
     Path(app_config.input_folder).mkdir(parents=True, exist_ok=True)

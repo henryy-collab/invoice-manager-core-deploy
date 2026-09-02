@@ -19,9 +19,9 @@ def ui_client(tmp_path, monkeypatch):
         "archive_folder": "data/archive",
         "filename_template": "{account}_{number}_Invoice_{date}.pdf",
         "date_format": "%Y%m%d",
-        "default_document_type": "googleadsinvoice",
+        "default_document_type": "google_ads",
         "document_types": {
-            "googleadsinvoice": {
+            "google_ads": {
                 "classifier": {"patterns": ["Invoice", "Invoice number", "Invoice date"]},
                 "fields": {
                     "account": {
@@ -29,6 +29,26 @@ def ui_client(tmp_path, monkeypatch):
                         "patterns": [{"regex": "^Account:\\s*(.+?)(?=\\s*\\[|\\s*$)", "group": 1, "flags": ["IGNORECASE", "MULTILINE"]}],
                         "unknown_values": ["-"],
                         "fallback": "UNKNOWN",
+                    },
+                    "account_id": {
+                        "parser": "account_id",
+                        "patterns": [
+                            {"regex": "Account:\\s*[^\\[]*?\\[([\\d\\-]+)\\]", "group": 1, "flags": ["IGNORECASE"]},
+                            {"regex": "Account\\s*ID[:\\s]+([\\d\\-]+)", "group": 1, "flags": ["IGNORECASE"]},
+                        ],
+                        "unknown_values": ["-"],
+                        "fallback": "UNKNOWN",
+                    },
+                    "accounts": {
+                        "parser": "accounts",
+                        "summary_marker_regex": "Summary\\s+of\\s+costs\\s+by\\s+account\\s+budget",
+                        "amount_header_regex": "^Amount\\s*\\(?[A-Z$€£¥]*\\)?$",
+                        "account_line_regex": "^Account:\\s*(.+?)(?=\\s*\\[|\\s*$)",
+                        "account_id_line_regex": "Account\\s*ID[:\\s]+([\\d\\-]+)",
+                        "total_label_regex": "(Total\\s*amount\\s*due\\s*in|Total\\s+in)\\s+[A-Z]{3}",
+                        "amount_regex": "(-?)(?:HK\\$|US\\$|\\$|€|£|¥|SGD|HKD|USD|AUD|GBP|EUR|JPY)?\\s*(-?[\\d,]+\\.\\d{2})",
+                        "id_lookahead": 4,
+                        "name_max_lines": 3,
                     },
                     "number": {
                         "parser": "number",
@@ -76,10 +96,12 @@ def ui_client(tmp_path, monkeypatch):
                 "manual_review_for_missing": ["account", "date"],
                 "report_columns": {
                     "account": "Client Ref.",
+                    "account_id": "Account ID",
                     "date": "PDF Invoice Date",
                     "number": "PDF Invoice No.",
                     "currency": "Topped Currency",
                     "total": "Topped amount",
+                    "platform": "Platform",
                 },
             }
         },
@@ -155,10 +177,10 @@ def test_config_round_trip_preserves_document_types(ui_client, tmp_path):
     assert not Path(saved["source_folder"]).is_absolute()
     assert not Path(saved["google_sheets"]["service_account_file"]).is_absolute()
 
-    # Default googleadsinvoice report columns should be preserved
-    googleadsinvoice = saved["document_types"]["googleadsinvoice"]
-    assert googleadsinvoice["report_columns"]["account"] == "Client Ref."
-    assert googleadsinvoice["report_columns"]["total"] == "Topped amount"
+    # Default google_ads report columns should be preserved
+    google_ads = saved["document_types"]["google_ads"]
+    assert google_ads["report_columns"]["account"] == "Client Ref."
+    assert google_ads["report_columns"]["total"] == "Topped amount"
 
 
 def test_config_round_trip_preserves_report_columns(ui_client):
@@ -166,7 +188,7 @@ def test_config_round_trip_preserves_report_columns(ui_client):
     assert res.status_code == 200
     cfg = res.json()["config"]
 
-    cfg["document_types"]["googleadsinvoice"]["report_columns"] = {
+    cfg["document_types"]["google_ads"]["report_columns"] = {
         "number": "Client Ref.",
         "account": "Invoice No.",
         "date": "Invoice Date",
@@ -177,7 +199,7 @@ def test_config_round_trip_preserves_report_columns(ui_client):
     res = ui_client.post("/api/config", json={"config": cfg})
     assert res.status_code == 200
     saved = res.json()["config"]
-    report_columns = saved["document_types"]["googleadsinvoice"]["report_columns"]
+    report_columns = saved["document_types"]["google_ads"]["report_columns"]
     assert report_columns["number"] == "Client Ref."
     assert report_columns["account"] == "Invoice No."
     assert report_columns["date"] == "Invoice Date"
@@ -404,6 +426,197 @@ Total amount due in HKD: HK$ 9,999.99
     assert "9999.99" in content
     assert "Invoice No." in content
     assert "5561278890" not in content
+    assert "Invoice Type" in content
+    assert "google_ads" in content
+    lines = [
+        [cell.strip().strip('"') for cell in line.split(",")]
+        for line in content.strip().splitlines()
+    ]
+    header = lines[0]
+    data_row = lines[1]
+    assert data_row[header.index("Platform")] == "google_ads"
+    assert data_row[header.index("Account ID")] == "12345"
+
+
+def test_preview_parses_account_id_separately(ui_client, tmp_path, monkeypatch):
+    pdf = tmp_path / "data" / "incoming" / "test.pdf"
+    pdf.write_bytes(b"%PDF-1.4 dummy")
+
+    monkeypatch.setattr("invoice_parser.processor.extract_text", lambda _path: """Account: Test Client [12345]
+Invoice number: 5561278890
+Invoice date: 15 April 2024
+Total amount due in HKD: HK$ 9,999.99
+""")
+
+    res = ui_client.post("/api/parse/preview")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["processed_count"] == 1
+    fields = data["results"][0]["fields"]
+    assert fields["account"] == "Test Client"
+    assert fields["account_id"] == "12345"
+
+
+def test_preview_parses_accounts_breakdown(ui_client, tmp_path, monkeypatch):
+    pdf = tmp_path / "data" / "incoming" / "test.pdf"
+    pdf.write_bytes(b"%PDF-1.4 dummy")
+
+    monkeypatch.setattr("invoice_parser.processor.extract_text", lambda _path: """Invoice number: 5565701224
+Invoice date: 30 April 2026
+Total amount due in HKD
+HK$19,617.21
+HK$0.00
+HK$19,617.21
+Summary of costs by account budget
+1 Apr 2026 - 30 Apr 2026
+Account ID
+Account
+Account budget
+Purchase
+Order
+Amount(HK$)
+802-155-
+0535
+HKCT - Brand [Monthly Invoicing]
+HKCT_HKCT Brand_2026 Apr
+804.21
+751-190-
+9696
+HKCT - CIE [Monthly Invoicing]
+HKCT_CIE_2026 Apr
+18,813.00
+Tax Invoice
+Invoice number: 5565701224
+Page 3 of 10
+HK$804.21
+HK$0.00
+HK$804.21
+Subtotal in HKD
+GST (0%)
+Total in HKD
+Account: HKCT - Brand [Monthly Invoicing]
+Account ID: 802-155-0535
+Account budget: HKCT_HKCT Brand_2026 Apr
+""")
+
+    res = ui_client.post("/api/parse/preview")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["processed_count"] == 1
+    fields = data["results"][0]["fields"]
+    assert fields["account"] == "HKCT - Brand"
+    assert fields["account_id"] == "8021550535"
+    import json
+    records = json.loads(fields["accounts"])
+    assert records == [
+        {"account": "HKCT - Brand", "account_id": "8021550535", "amount": "804.21"},
+        {"account": "HKCT - CIE", "account_id": "7511909696", "amount": "18813.00"},
+    ]
+
+
+def test_accounts_endpoint_returns_aggregated_records(ui_client, tmp_path, monkeypatch):
+    archive = tmp_path / "data" / "archive"
+    archive.mkdir(parents=True)
+    (archive / "5565701224.pdf").write_bytes(b"%PDF-1.4 dummy")
+    state_dir = tmp_path / "data" / "state"
+    state_dir.mkdir(parents=True)
+    (state_dir / "last_run_processed.json").write_text(
+        json.dumps({"processed": ["5565701224.pdf"]}), encoding="utf-8"
+    )
+
+    monkeypatch.setattr("invoice_parser.processor.extract_text", lambda _path: """Invoice number: 5565701224
+Invoice date: 30 April 2026
+Total amount due in HKD
+HK$19,617.21
+HK$0.00
+HK$19,617.21
+Summary of costs by account budget
+1 Apr 2026 - 30 Apr 2026
+Account ID
+Account
+Account budget
+Purchase
+Order
+Amount(HK$)
+802-155-
+0535
+HKCT - Brand [Monthly Invoicing]
+HKCT_HKCT Brand_2026 Apr
+804.21
+751-190-
+9696
+HKCT - CIE [Monthly Invoicing]
+HKCT_CIE_2026 Apr
+18,813.00
+Tax Invoice
+Invoice number: 5565701224
+Page 3 of 10
+HK$804.21
+HK$0.00
+HK$804.21
+Subtotal in HKD
+GST (0%)
+Total in HKD
+Account: HKCT - Brand [Monthly Invoicing]
+Account ID: 802-155-0535
+Account budget: HKCT_HKCT Brand_2026 Apr
+""")
+
+    res = ui_client.get("/api/accounts")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["count"] == 2
+    by_id = {r["account_id"]: r for r in data["records"]}
+    assert by_id["8021550535"]["account"] == "HKCT - Brand"
+    assert by_id["8021550535"]["amount"] == "804.21"
+    assert by_id["8021550535"]["invoices"][0]["date"] == "2026-04-30"
+
+
+def test_accounts_endpoint_latest_run_excludes_prior_and_scope_all(ui_client, tmp_path, monkeypatch):
+    archive = tmp_path / "data" / "archive"
+    archive.mkdir(parents=True)
+    (archive / "a.pdf").write_bytes(b"%PDF-1.4 dummy")
+    (archive / "b.pdf").write_bytes(b"%PDF-1.4 dummy")
+    state_dir = tmp_path / "data" / "state"
+    state_dir.mkdir(parents=True)
+    (state_dir / "last_run_processed.json").write_text(
+        json.dumps({"processed": ["a.pdf"]}), encoding="utf-8"
+    )
+
+    base = """Invoice number: 5561278890
+Invoice date: 30 April 2026
+Total amount due in HKD
+HK$18,995.38
+HK$0.00
+HK$18,995.38
+Account: Intertextile Shanghai [Monthly Invoicing]
+Account ID: 180-983-1993
+Account budget: Monthly Invoicing
+"""
+    texts = {
+        "a.pdf": base,
+        "b.pdf": base.replace("5561278890", "9999999999").replace("Intertextile Shanghai", "Other Client").replace("180-983-1993", "200-000-0000"),
+    }
+    monkeypatch.setattr("invoice_parser.processor.extract_text", lambda p: texts[p.name])
+
+    latest = ui_client.get("/api/accounts").json()
+    assert latest["count"] == 1
+    assert latest["records"][0]["account_id"] == "1809831993"
+
+    all_data = ui_client.get("/api/accounts?scope=all").json()
+    assert all_data["count"] == 2
+    assert {r["account_id"] for r in all_data["records"]} == {"1809831993", "2000000000"}
+
+
+def test_accounts_endpoint_no_state_returns_empty(ui_client, tmp_path, monkeypatch):
+    archive = tmp_path / "data" / "archive"
+    archive.mkdir(parents=True)
+    (archive / "a.pdf").write_bytes(b"%PDF-1.4 dummy")
+    monkeypatch.setattr("invoice_parser.processor.extract_text", lambda _p: "irrelevant")
+
+    res = ui_client.get("/api/accounts")
+    assert res.status_code == 200
+    assert res.json() == {"records": [], "count": 0, "errors": 0}
 
 
 def test_download_csv_uses_alternate_report_columns(ui_client, tmp_path, monkeypatch):
@@ -419,7 +632,7 @@ Total amount due in HKD: HK$ 500.00
     res = ui_client.get("/api/config")
     cfg = res.json()["config"]
     cfg["document_types"] = {
-        "googleadsinvoice": {
+        "google_ads": {
             "classifier": {"patterns": ["Invoice"]},
             "fields": {},
             "filename_template": "{account}_{number}_Invoice_{date}.pdf",

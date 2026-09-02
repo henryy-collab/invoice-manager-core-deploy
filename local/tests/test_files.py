@@ -6,6 +6,7 @@ from invoice_parser.files import (
     is_already_processed,
     missing_required_fields,
     rename_pdf,
+    write_metadata_file,
 )
 from invoice_parser.models import Invoice
 
@@ -95,3 +96,12 @@ def test_cleanup_source_removes_file(tmp_path):
     cleanup_source(src, logger)
 
     assert not src.exists()
+
+
+def test_write_metadata_file_includes_document_type(tmp_path):
+    import json
+    target = tmp_path / "invoice.pdf"
+    document = Invoice(account="ACME", number="INV-001", document_type="google_ads")
+    write_metadata_file(target, document)
+    meta = json.loads((tmp_path / "invoice.pdf.meta.json").read_text(encoding="utf-8"))
+    assert meta["document_type"] == "google_ads"

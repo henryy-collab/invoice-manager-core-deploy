@@ -193,6 +193,8 @@ const configModule = {
     editor.appendChild(section("Filename placeholder defaults", [
       checkboxField("Account: clean for filenames", `document_types.${typeName}.placeholders.account.sanitize`, placeholders.account?.sanitize, "Remove characters that are invalid in filenames."),
       textField("Account: fallback value", `document_types.${typeName}.placeholders.account.fallback`, placeholders.account?.fallback, "Used when account cannot be found."),
+      checkboxField("Account ID: clean for filenames", `document_types.${typeName}.placeholders.account_id.sanitize`, placeholders.account_id?.sanitize, "Remove characters that are invalid in filenames."),
+      textField("Account ID: fallback value", `document_types.${typeName}.placeholders.account_id.fallback`, placeholders.account_id?.fallback, "Used when the account ID cannot be found."),
       checkboxField("Number: clean for filenames", `document_types.${typeName}.placeholders.number.sanitize`, placeholders.number?.sanitize, "Remove characters that are invalid in filenames."),
       textField("Number: fallback value", `document_types.${typeName}.placeholders.number.fallback`, placeholders.number?.fallback, "Used when invoice number cannot be found."),
       checkboxField("Date: clean for filenames", `document_types.${typeName}.placeholders.date.sanitize`, placeholders.date?.sanitize, "Remove characters that are invalid in filenames."),
@@ -225,7 +227,7 @@ const configModule = {
     const row = document.createElement("div");
     row.className = "form-row document-type-fields";
 
-    const knownFields = ["account", "number", "date", "currency", "total"];
+    const knownFields = ["account", "account_id", "accounts", "number", "date", "currency", "total"];
     knownFields.forEach((fieldName) => {
       const fieldConfig = fields[fieldName] || { parser: fieldName };
       row.appendChild(this._renderFieldCard(typeName, fieldName, fieldConfig));
@@ -243,7 +245,7 @@ const configModule = {
     heading.textContent = fieldName;
     card.appendChild(heading);
 
-    const parserOptions = ["account", "number", "date", "currency", "total", "custom"];
+    const parserOptions = ["account", "account_id", "accounts", "number", "date", "currency", "total", "custom"];
     const optionsHtml = parserOptions.map((opt) => {
       const selected = fieldConfig.parser === opt ? "selected" : "";
       return `<option value="${escapeAttr(opt)}" ${selected}>${escapeHtml(opt)}</option>`;
@@ -274,11 +276,12 @@ const configModule = {
     row.className = "form-row";
 
     const fixedColumns = [
-      "Client Ref.", "Platform", "Agreed Amount", "Invoice No.", "Amount",
+      "Client Ref.", "Account ID", "Platform", "Agreed Amount", "Invoice No.", "Amount",
       "Invoice Date", "Paid Date", "AM", "PM", "Informed AM & PM",
       "Top up date", "Topped Currency", "Topped amount", "Balance",
+      "Invoice Type",
     ];
-    const fieldOptions = ["", "account", "number", "date", "total", "currency"];
+    const fieldOptions = ["", "account", "account_id", "number", "date", "total", "currency", "document_type"];
 
     fixedColumns.forEach((columnName) => {
       const currentField = Object.entries(reportColumns).find(([, col]) => col === columnName)?.[0] || "";

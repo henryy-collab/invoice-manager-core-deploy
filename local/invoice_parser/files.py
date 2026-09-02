@@ -57,6 +57,14 @@ def archive_original(
 def write_metadata_file(target: Path, document: Document) -> None:
     meta_path = target.with_suffix(target.suffix + ".meta.json")
     meta = document.to_dict()
+    accounts = meta.get("accounts")
+    if isinstance(accounts, str):
+        try:
+            meta["accounts"] = json.loads(accounts)
+        except (ValueError, TypeError):
+            pass
+    meta.pop("document_type", None)
+    meta["document_type"] = document.document_type
     meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
 

@@ -9,6 +9,7 @@ from invoice_parser.config import AppConfig, DocumentTypeConfig
 @dataclass
 class ReportRow:
     client_ref: str = ""
+    account_id: str = ""
     platform: str = ""
     agreed_amount: str = ""
     invoice_no: str = ""
@@ -22,10 +23,12 @@ class ReportRow:
     topped_currency: str = ""
     topped_amount: str = ""
     balance: str = ""
+    invoice_type: str = ""
 
 
 _COLUMNS = [
     "Client Ref.",
+    "Account ID",
     "Platform",
     "Agreed Amount",
     "Invoice No.",
@@ -39,11 +42,13 @@ _COLUMNS = [
     "Topped Currency",
     "Topped amount",
     "Balance",
+    "Invoice Type",
 ]
 
 
 _COLUMN_TO_ATTR = {
     "Client Ref.": "client_ref",
+    "Account ID": "account_id",
     "Platform": "platform",
     "Agreed Amount": "agreed_amount",
     "Invoice No.": "invoice_no",
@@ -57,6 +62,7 @@ _COLUMN_TO_ATTR = {
     "Topped Currency": "topped_currency",
     "Topped amount": "topped_amount",
     "Balance": "balance",
+    "Invoice Type": "invoice_type",
 }
 
 
@@ -67,13 +73,17 @@ def _result_to_row(result, type_config: DocumentTypeConfig) -> ReportRow:
     for column, attr in _COLUMN_TO_ATTR.items():
         field = column_to_field.get(column)
         if field is not None:
-            setattr(row, attr, fields.get(field) or "")
+            if field in ("document_type", "platform"):
+                setattr(row, attr, getattr(result, "document_type", "") or fields.get(field) or "")
+            else:
+                setattr(row, attr, fields.get(field) or "")
     return row
 
 
 def _row_to_list(row: ReportRow) -> list[str]:
     return [
         row.client_ref,
+        row.account_id,
         row.platform,
         row.agreed_amount,
         row.invoice_no,
@@ -87,6 +97,7 @@ def _row_to_list(row: ReportRow) -> list[str]:
         row.topped_currency,
         row.topped_amount,
         row.balance,
+        row.invoice_type,
     ]
 
 
