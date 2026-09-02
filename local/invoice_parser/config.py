@@ -335,6 +335,21 @@ class GoogleSheetsConfig(BaseModel):
         return v
 
 
+class NocoDBConfig(BaseModel):
+    enabled: bool = False
+    base_id: str = ""
+    table_id: str = ""
+    column_map: dict[str, str] = Field(default_factory=lambda: {
+        "account": "ad_account_name",
+        "account_id": "account_id",
+        "number": "pdf_invoice_number",
+        "date": "pdf_invoice_date",
+        "total": "topped_amount",
+        "currency": "currency",
+        "source": "source",
+    })
+
+
 class AppConfig(BaseModel):
     source_folder: str
     filename_template: str = "{account}_{number}_Invoice_{date}.pdf"
@@ -353,6 +368,7 @@ class AppConfig(BaseModel):
     rclone: RcloneConfig = Field(default_factory=RcloneConfig)
     reports: ReportsConfig = Field(default_factory=ReportsConfig)
     google_sheets: GoogleSheetsConfig = Field(default_factory=GoogleSheetsConfig)
+    nocodb: NocoDBConfig = Field(default_factory=NocoDBConfig)
 
     @model_validator(mode="after")
     def migrate_flat_config_to_document_types(self):

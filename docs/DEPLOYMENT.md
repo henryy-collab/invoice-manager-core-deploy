@@ -30,6 +30,8 @@ The container reads three files from environment variables. All are now **option
 | `SERVICE_ACCOUNT_JSON` | The full contents of `connect-ai-pc-fad7ca673e19.json` (raw JSON, or base64-encoded via `SERVICE_ACCOUNT_JSON_B64`) |
 | `APP_CONFIG_JSON` | The full contents of `local/local_config.json` as plain JSON |
 | `RCLONE_CONF` | The full contents of `rclone.conf` with newlines replaced by `\|` pipe characters (or base64 via `RCLONE_CONF_B64`) |
+| `NOCODB_TOKEN` | NocoDB API token (used by the `upload_nocodb.py` CLI, `xc-token` header) |
+| `NOCODB_URL` | NocoDB base URL (default `http://localhost:3000`). For a deployed container use a URL reachable from the server, not `localhost`. |
 
 The `RCLONE_CONF` pipe format is used because multi-line values are hard to paste into some deployment environments. For example:
 

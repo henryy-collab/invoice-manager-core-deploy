@@ -46,6 +46,21 @@
     "protect_raw_sheets": true
   },
 
+  "nocodb": {
+    "enabled": false,
+    "base_id": "",
+    "table_id": "",
+    "column_map": {
+      "account": "ad_account_name",
+      "account_id": "account_id",
+      "number": "pdf_invoice_number",
+      "date": "pdf_invoice_date",
+      "total": "topped_amount",
+      "currency": "currency",
+      "source": "source"
+    }
+  },
+
   "parsers": {
     "account": {
       "patterns": [

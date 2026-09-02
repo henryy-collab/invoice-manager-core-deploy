@@ -15,6 +15,7 @@ This Python script reads PDF invoices, extracts key fields using **PyMuPDF**, an
 - Supports a `--dry-run` flag to preview changes without touching files.
 - Writes JSON logs to `parse_and_rename.log`.
 - Can append extracted invoice fields to a Google Sheets report (configured separately in `local_config.json`).
+- Can upload extracted invoice fields to a NocoDB `Invoices` table from the `.meta.json` sidecars (`upload_nocodb.py`).
 
 ## Why PyMuPDF instead of Docling
 
@@ -224,6 +225,46 @@ In dry-run mode the script logs every intended rename and archive copy but does 
 ```powershell
 python parse_and_rename.py "G:\...\Test Destination\5593369279.pdf" --dry-run
 ```
+
+### Upload parsed invoices to NocoDB
+
+After processing, upload the `.meta.json` sidecars (in `output_folder`) to a NocoDB `Invoices` table:
+
+```powershell
+python upload_nocodb.py --dry-run   # preview payloads without uploading
+python upload_nocodb.py             # upload
+```
+
+Configuration lives in the `nocodb` section of `local_config.json`:
+
+```json
+{
+  "nocodb": {
+    "enabled": true,
+    "base_id": "pk5ing4mu06vtd6",
+    "table_id": "md8v02ty4emzxzn",
+    "column_map": {
+      "account": "ad_account_name",
+      "account_id": "account_id",
+      "number": "pdf_invoice_number",
+      "date": "pdf_invoice_date",
+      "total": "topped_amount",
+      "currency": "currency",
+      "source": "source"
+    }
+  }
+}
+```
+
+Environment variables (gitignored, in `.env`):
+
+- `NOCODB_TOKEN` — the NocoDB API token (`xc-token` header).
+- `NOCODB_URL` — NocoDB base URL (default `http://localhost:3000`). For a deployed container, use a URL reachable from the server, not `localhost`.
+
+Notes:
+
+- `source` is a dropdown column in NocoDB; the app does not parse a source value yet, so it is uploaded as empty.
+- Use `--dry-run` first to confirm the payload mapping before uploading for real.
 
 ## Web UI
 
