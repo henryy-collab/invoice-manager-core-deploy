@@ -63,6 +63,8 @@ def write_metadata_file(target: Path, document: Document) -> None:
             meta["accounts"] = json.loads(accounts)
         except (ValueError, TypeError):
             pass
+    meta.pop("document_type", None)
+    meta["document_type"] = document.document_type
     meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
 
