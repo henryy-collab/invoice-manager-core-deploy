@@ -225,7 +225,7 @@ class SyncService:
                 continue
 
             try:
-                result = self._run_rclone(["copy", "--files-from", str(list_file), str(output_path), remote_path])
+                result = self._run_rclone(["copy", "--files-from-raw", str(list_file), str(output_path), remote_path])
             finally:
                 try:
                     list_file.unlink()
@@ -313,17 +313,16 @@ class SyncService:
         platform_results: dict[str, bool] = {}
 
         for document_type, remote_path in remote_targets:
-            try:
-                result = self._run_rclone(["delete", "--files-from", str(list_file), remote_path])
-            finally:
-                if list_file.is_file():
-                    try:
-                        list_file.unlink()
-                    except OSError:
-                        pass
+            result = self._run_rclone(["delete", "--files-from-raw", str(list_file), remote_path])
             platform_results[document_type] = result["success"]
             if not result["success"]:
                 errors.append(f"{document_type}: {result.get('stderr') or result.get('error') or 'Unknown error'}")
+
+        if list_file.is_file():
+            try:
+                list_file.unlink()
+            except OSError:
+                pass
 
         if errors:
             return {

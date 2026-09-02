@@ -2,6 +2,13 @@
 
 A record of merged features and notable changes for Invoice Manager Core.
 
+## 2026-09-02 — fix: rclone push/clear reject filenames starting with `#`
+
+- `SyncService.push_outgoing` and `SyncService.clear_remote_input` now write the per-run file list with `--files-from-raw` instead of `--files-from`.
+- Root cause: rclone's `--files-from` treats lines starting with `#` or `;` as comments, so a renamed invoice whose account name starts with `#` (e.g. `#24123_-_st.com_-_Facebook_...`) was silently skipped by the push copy — it then ran the successful-path cleanup, deleting the local outgoing copy without uploading it. `--files-from-raw` reads every line verbatim.
+- `clear_remote_input` also kept its list file alive for the whole platform loop — previously the list file was unlinked after the first platform's rclone call, so the second platform's delete ran against a deleted file. The cleanup now happens once after the loop.
+- **Tests**: new `ui/tests/test_sync_service.py` cases asserting a `#`-prefixed target name is passed through for both push and clear.
+
 ## 2026-09-02 — account_id report column; Platform carries document type
 
 - **New `Account ID` report column** (index 1, after `Client Ref.`) in both the Google Sheets report rows and the CSV export (`sheets.py` `HEADER_COLUMNS`, `reports_service.py` `_COLUMNS`/`ReportRow`).

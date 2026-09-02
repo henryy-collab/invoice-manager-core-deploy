@@ -161,6 +161,66 @@ def test_push_outgoing_routes_by_document_type(tmp_path, monkeypatch):
     assert "test-remote:META/Dest/202609" in destinations
 
 
+def test_push_outgoing_uses_files_from_raw_for_hash_prefix_names(tmp_path, monkeypatch):
+    config = _multi_platform_config(tmp_path)
+    service = SyncService(config)
+    outgoing = Path(config.output_folder)
+    outgoing.mkdir(parents=True)
+
+    ga_meta = {
+        "account": "#24123 - st.com - Facebook", "number": "242000011158", "date": "20260501",
+        "currency": "HKD", "total": "1.00", "document_type": "facebook",
+    }
+    (outgoing / "#24123_-_st.com_-_Facebook_242000011158_Invoice_20260501.pdf").write_bytes(b"x")
+    (outgoing / "#24123_-_st.com_-_Facebook_242000011158_Invoice_20260501.pdf.meta.json").write_text(
+        json.dumps(ga_meta), encoding="utf-8"
+    )
+
+    calls: list[list[str]] = []
+
+    def fake_run(args):
+        calls.append(list(args))
+        list_file = Path(args[2])
+        captured = list_file.read_text(encoding="utf-8")
+        assert "#24123_-_st.com_-_Facebook_242000011158_Invoice_20260501.pdf" in captured
+        assert "--files-from-raw" in args
+        return {"success": True, "stderr": "", "error": None}
+
+    monkeypatch.setattr(service, "_run_rclone", fake_run)
+    result = service.push_outgoing()
+
+    assert result["success"] is True
+    assert result["pushed"] == 1
+
+
+def test_clear_remote_input_uses_files_from_raw_for_hash_prefix_names(tmp_path, monkeypatch):
+    config = _multi_platform_config(tmp_path)
+    service = SyncService(config)
+    state_dir = Path(config.output_folder).parent / "state"
+    state_dir.mkdir(parents=True)
+    (state_dir / "last_run_processed.json").write_text(
+        json.dumps({"processed": ["#24123_-_st.com_-_Facebook_242000011158.pdf"], "manual_review": [], "failed": []}),
+        encoding="utf-8",
+    )
+
+    calls: list[list[str]] = []
+
+    def fake_run(args):
+        calls.append(list(args))
+        list_file = Path(args[2])
+        captured = list_file.read_text(encoding="utf-8")
+        assert "#24123_-_st.com_-_Facebook_242000011158.pdf" in captured
+        assert "--files-from-raw" in args
+        return {"success": True, "stderr": "", "error": None}
+
+    monkeypatch.setattr(service, "_run_rclone", fake_run)
+    result = service.clear_remote_input()
+
+    assert result["success"] is True
+    delete_calls = [c for c in calls if c[0] == "delete"]
+    assert len(delete_calls) == 2
+
+
 def test_clear_remote_input_deletes_from_each_platform(tmp_path, monkeypatch):
     config = _multi_platform_config(tmp_path)
     service = SyncService(config)
