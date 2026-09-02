@@ -276,11 +276,12 @@ const configModule = {
     row.className = "form-row";
 
     const fixedColumns = [
-      "Client Ref.", "Platform", "Agreed Amount", "Invoice No.", "Amount",
+      "Client Ref.", "Account ID", "Platform", "Agreed Amount", "Invoice No.", "Amount",
       "Invoice Date", "Paid Date", "AM", "PM", "Informed AM & PM",
       "Top up date", "Topped Currency", "Topped amount", "Balance",
+      "Invoice Type",
     ];
-    const fieldOptions = ["", "account", "account_id", "number", "date", "total", "currency"];
+    const fieldOptions = ["", "account", "account_id", "number", "date", "total", "currency", "document_type"];
 
     fixedColumns.forEach((columnName) => {
       const currentField = Object.entries(reportColumns).find(([, col]) => col === columnName)?.[0] || "";

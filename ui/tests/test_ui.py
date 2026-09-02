@@ -19,9 +19,9 @@ def ui_client(tmp_path, monkeypatch):
         "archive_folder": "data/archive",
         "filename_template": "{account}_{number}_Invoice_{date}.pdf",
         "date_format": "%Y%m%d",
-        "default_document_type": "googleadsinvoice",
+        "default_document_type": "google_ads",
         "document_types": {
-            "googleadsinvoice": {
+            "google_ads": {
                 "classifier": {"patterns": ["Invoice", "Invoice number", "Invoice date"]},
                 "fields": {
                     "account": {
@@ -96,10 +96,12 @@ def ui_client(tmp_path, monkeypatch):
                 "manual_review_for_missing": ["account", "date"],
                 "report_columns": {
                     "account": "Client Ref.",
+                    "account_id": "Account ID",
                     "date": "PDF Invoice Date",
                     "number": "PDF Invoice No.",
                     "currency": "Topped Currency",
                     "total": "Topped amount",
+                    "platform": "Platform",
                 },
             }
         },
@@ -175,10 +177,10 @@ def test_config_round_trip_preserves_document_types(ui_client, tmp_path):
     assert not Path(saved["source_folder"]).is_absolute()
     assert not Path(saved["google_sheets"]["service_account_file"]).is_absolute()
 
-    # Default googleadsinvoice report columns should be preserved
-    googleadsinvoice = saved["document_types"]["googleadsinvoice"]
-    assert googleadsinvoice["report_columns"]["account"] == "Client Ref."
-    assert googleadsinvoice["report_columns"]["total"] == "Topped amount"
+    # Default google_ads report columns should be preserved
+    google_ads = saved["document_types"]["google_ads"]
+    assert google_ads["report_columns"]["account"] == "Client Ref."
+    assert google_ads["report_columns"]["total"] == "Topped amount"
 
 
 def test_config_round_trip_preserves_report_columns(ui_client):
@@ -186,7 +188,7 @@ def test_config_round_trip_preserves_report_columns(ui_client):
     assert res.status_code == 200
     cfg = res.json()["config"]
 
-    cfg["document_types"]["googleadsinvoice"]["report_columns"] = {
+    cfg["document_types"]["google_ads"]["report_columns"] = {
         "number": "Client Ref.",
         "account": "Invoice No.",
         "date": "Invoice Date",
@@ -197,7 +199,7 @@ def test_config_round_trip_preserves_report_columns(ui_client):
     res = ui_client.post("/api/config", json={"config": cfg})
     assert res.status_code == 200
     saved = res.json()["config"]
-    report_columns = saved["document_types"]["googleadsinvoice"]["report_columns"]
+    report_columns = saved["document_types"]["google_ads"]["report_columns"]
     assert report_columns["number"] == "Client Ref."
     assert report_columns["account"] == "Invoice No."
     assert report_columns["date"] == "Invoice Date"
@@ -424,6 +426,16 @@ Total amount due in HKD: HK$ 9,999.99
     assert "9999.99" in content
     assert "Invoice No." in content
     assert "5561278890" not in content
+    assert "Invoice Type" in content
+    assert "google_ads" in content
+    lines = [
+        [cell.strip().strip('"') for cell in line.split(",")]
+        for line in content.strip().splitlines()
+    ]
+    header = lines[0]
+    data_row = lines[1]
+    assert data_row[header.index("Platform")] == "google_ads"
+    assert data_row[header.index("Account ID")] == "12345"
 
 
 def test_preview_parses_account_id_separately(ui_client, tmp_path, monkeypatch):
@@ -620,7 +632,7 @@ Total amount due in HKD: HK$ 500.00
     res = ui_client.get("/api/config")
     cfg = res.json()["config"]
     cfg["document_types"] = {
-        "googleadsinvoice": {
+        "google_ads": {
             "classifier": {"patterns": ["Invoice"]},
             "fields": {},
             "filename_template": "{account}_{number}_Invoice_{date}.pdf",
