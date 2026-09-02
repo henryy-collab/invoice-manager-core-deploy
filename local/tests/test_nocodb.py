@@ -13,6 +13,7 @@ def test_build_payload_maps_fields_and_empty_source():
         "date": "20240101",
         "total": "1234.56",
         "currency": "HKD",
+        "document_type": "google_ads",
     }
     column_map = {
         "account": "ad_account_name",
@@ -22,6 +23,7 @@ def test_build_payload_maps_fields_and_empty_source():
         "total": "topped_amount",
         "currency": "currency",
         "source": "source",
+        "document_type": "invoice_type",
     }
     payload = _build_payload(fields, column_map)
     assert payload["fields"]["ad_account_name"] == "ACME"
@@ -31,6 +33,7 @@ def test_build_payload_maps_fields_and_empty_source():
     assert payload["fields"]["topped_amount"] == "1234.56"
     assert payload["fields"]["currency"] == "HKD"
     assert payload["fields"]["source"] == ""
+    assert payload["fields"]["invoice_type"] == "google_ads"
 
 
 def test_find_meta_files(tmp_path):

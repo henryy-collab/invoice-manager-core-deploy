@@ -23,6 +23,44 @@ def test_parse_account_id_bracketed(sample_config):
     assert parse_account("Account: Test Client [12345]", sample_config.parsers.account_id) == "12345"
 
 
+def test_parse_invoice_google_ads_account_id_dashes_stripped(minimal_config_dict):
+    from invoice_parser.config import AppConfig
+
+    config = AppConfig.model_validate({
+        **minimal_config_dict,
+        "document_types": {
+            "google_ads": {
+                "classifier": {"patterns": ["Invoice"]},
+                "fields": {
+                    "account": {
+                        "parser": "account",
+                        "patterns": [{"regex": "^Account:\\s*(.+?)(?=\\s*\\[|\\s*$)", "group": 1, "flags": ["IGNORECASE", "MULTILINE"]}],
+                    },
+                    "account_id": {
+                        "parser": "account_id",
+                        "patterns": [
+                            {"regex": "Account:\\s*[^\\[]*?\\[([\\d\\-]+)\\]", "group": 1, "flags": ["IGNORECASE"]},
+                            {"regex": "Account\\s*ID[:\\s]+([\\d\\-]+)", "group": 1, "flags": ["IGNORECASE"]},
+                        ],
+                    },
+                },
+                "filename_template": "{account}_{number}_Invoice_{date}.pdf",
+            }
+        },
+        "default_document_type": "google_ads",
+    })
+    text = """
+Account: HealthBaby Biotech (Hong Kong) [Monthly Invoicing]
+Account ID: 933-864-1234
+Invoice number: 5647673191
+Invoice date: 31 July 2026
+Total amount due in HKD: HK$ 32,094.95
+"""
+    invoice = parse_invoice(text, "5647673191", config)
+    assert invoice.account == "HealthBaby Biotech (Hong Kong)"
+    assert invoice.account_id == "9338641234"
+
+
 def test_parse_account_id_explicit_line(sample_config):
     assert parse_account("Account ID: 12345", sample_config.parsers.account_id) == "12345"
 
@@ -292,3 +330,130 @@ Account budget: Monthly Invoicing
     assert records == [
         {"account": "CC16", "account_id": "9518226080", "amount": "-40.83"},
     ]
+
+
+META_ADS_TEXT = """
+Invoice #:
+242000012166
+Invoice Date:
+01-May-2026
+Billing Period:
+Apr-26
+Account Id / Group:
+2774570109502796
+Payment Terms:
+NET 30
+PO Number:
+FP_Zung Fu HK
+Subtotal:
+35,903.85
+Freight:
+0.00
+Invoice Total:
+35,903.85
+Invoice Currency:
+HKD
+"""
+
+
+def _facebook_document_types():
+    return {
+        "facebook": {
+            "classifier": {
+                "patterns": [
+                    "Invoice #",
+                    "Account Id / Group",
+                    "Billing Period",
+                    "PO Number",
+                    "INVOICE NUMBER MUST BE REFERENCED",
+                    "Meta Platforms Ireland",
+                ]
+            },
+            "fields": {
+                "account": {
+                    "parser": "account",
+                    "patterns": [{"regex": "PO Number:\\s*\\n\\s*([^\\n]+)", "group": 1}],
+                    "unknown_values": ["-", "—", "--", "N/A", "n/a"],
+                    "fallback": "UNKNOWN",
+                },
+                "account_id": {
+                    "parser": "account_id",
+                    "patterns": [{"regex": "Account Id / Group:\\s*\\n\\s*(\\d+)", "group": 1}],
+                    "unknown_values": ["-", "—", "--", "N/A", "n/a"],
+                    "fallback": "UNKNOWN",
+                },
+                "number": {
+                    "parser": "number",
+                    "patterns": [{"regex": "Invoice #:\\s*\\n\\s*(\\d+)", "group": 1}],
+                    "require_digit": True,
+                },
+                "date": {
+                    "parser": "date",
+                    "parse_formats": [
+                        "%d-%b-%Y",
+                        "%d %B %Y",
+                        "%d %b %Y",
+                        "%Y-%m-%d",
+                        "%d/%m/%Y",
+                        "%m/%d/%Y",
+                        "%d-%m-%Y",
+                    ],
+                    "details_block": {"enabled": False},
+                },
+                "currency": {
+                    "parser": "currency",
+                    "primary_regex": "Invoice Currency:\\s*\\n\\s*([A-Z]{3})",
+                },
+                "total": {
+                    "parser": "total",
+                    "primary_regexes": ["Invoice Total:\\s*\\n\\s*(-?[\\d,]+\\.\\d{2})"],
+                },
+            },
+            "filename_template": "{account}_{number}_Invoice_{date}.pdf",
+            "manual_review_for_missing": ["account", "date"],
+        }
+    }
+
+
+def test_parse_date_dash_month_name(minimal_config_dict):
+    from invoice_parser.config import AppConfig
+    config = AppConfig.model_validate({
+        **minimal_config_dict,
+        "document_types": _facebook_document_types(),
+        "default_document_type": "facebook",
+    })
+    type_config = config.document_types["facebook"]
+    invoice = parse_invoice(META_ADS_TEXT, "Transaction_242000012166", config, type_config=type_config, document_type="facebook")
+    assert invoice.date == "20260501"
+
+
+def test_parse_facebook_document(minimal_config_dict):
+    from invoice_parser.config import AppConfig
+    config = AppConfig.model_validate({
+        **minimal_config_dict,
+        "document_types": _facebook_document_types(),
+        "default_document_type": "facebook",
+    })
+    invoice = parse_invoice(META_ADS_TEXT, "Transaction_242000012166", config)
+    assert invoice.account == "FP_Zung Fu HK"
+    assert invoice.account_id == "2774570109502796"
+    assert invoice.number == "242000012166"
+    assert invoice.date == "20260501"
+    assert invoice.currency == "HKD"
+    assert invoice.total == "35903.85"
+
+
+def test_classify_facebook_over_googleads(minimal_config_dict):
+    from invoice_parser.classifier import classify_document
+    from invoice_parser.config import AppConfig
+    document_types = _facebook_document_types()
+    document_types["google_ads"] = {
+        "classifier": {"patterns": ["Invoice", "Invoice number", "Invoice date"]},
+        "fields": {},
+    }
+    config = AppConfig.model_validate({
+        **minimal_config_dict,
+        "document_types": document_types,
+        "default_document_type": "google_ads",
+    })
+    assert classify_document(META_ADS_TEXT, config.document_types, config.default_document_type) == "facebook"

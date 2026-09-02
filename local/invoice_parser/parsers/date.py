@@ -67,7 +67,7 @@ def parse_date_field(text: str, date_fmt: str, config: DateParserConfig) -> Opti
     lines = text.splitlines()
     window = config.nearby_line_window
     date_regex = re.compile(
-        r"\b(\d{1,2}\s+[A-Za-z]+\s+\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\b"
+        r"\b(\d{1,2}\s+[A-Za-z]+\s+\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{1,2}-[A-Za-z]{3}-\d{4})\b"
     )
     invoice_date_re = re.compile(r"Invoice\s*date", re.IGNORECASE)
 
