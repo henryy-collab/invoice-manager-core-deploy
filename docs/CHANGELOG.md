@@ -2,6 +2,18 @@
 
 A record of merged features and notable changes for Invoice Manager Core.
 
+## 2026-09-02 — Subagent task-breaking guidance
+
+- Added a **"Working with subagents"** section to the root `AGENTS.md` and an item in the `project/docs/AGENTS.md` "User's working style": break large tasks into small, single-responsibility parts, give each part its own verification, pack subagent prompts with full context, and re-run both test suites after integrating subagent output.
+
+## 2026-08-25 — NocoDB upload CLI
+
+- **New `upload_nocodb.py`**: uploads parsed invoice `.meta.json` sidecars from `output_folder` to a NocoDB `Invoices` table via the v3 REST API (`xc-token` auth).
+- **New `invoice_parser/nocodb.py`**: `upload_invoices()` maps each sidecar's parsed fields to NocoDB columns and `POST /api/v3/data/{base}/{table}/records`; `upload_from_config()` drives it from the `nocodb` config section. `source` (a NocoDB dropdown) is uploaded empty because the app does not parse a source value yet.
+- **New `nocodb` config section** in `AppConfig` / `local_config.example.json`: `{enabled, base_id, table_id, column_map}`. Default column mapping: `account→ad_account_name`, `account_id→account_id`, `number→pdf_invoice_number`, `date→pdf_invoice_date`, `total→topped_amount`, `currency→currency`, `source→source`.
+- **Env vars**: `NOCODB_TOKEN` (renamed from `NOCO_TOKEN`) and `NOCODB_URL` (default `http://localhost:3000`), both gitignored in `.env`.
+- **Tests**: `local/tests/test_nocodb.py` covers payload mapping (incl. empty `source`), dry-run, missing-token, and config-disabled/id-less paths.
+
 ## 2026-08-19 — Account-keyed data endpoint and normalized account IDs
 
 - **`GET /api/accounts`** (new, separate from the parse/report flow): returns a JSON array of extracted fields keyed by `account_id` as the unique identifier.

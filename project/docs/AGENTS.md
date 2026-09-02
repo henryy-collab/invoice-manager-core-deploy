@@ -137,6 +137,14 @@ When implementing anything new, follow this approach:
    - No commits unless explicitly asked.
    - No large refactors without discussion.
    - Keep changes minimal and focused on the task.
+9. Working with subagents
+   - Break large tasks into small, independent parts instead of one big prompt.
+   - Split by responsibility, not by file; each part has one job.
+   - Each part must be independently verifiable (its own test or a concrete check).
+   - Subagents start with fresh context — pack each prompt with file paths, conventions, acceptance criteria, and the verify command.
+   - The orchestrating session keeps the overall flow, cross-cutting docs, and all commits; subagents only implement and verify their part.
+   - Re-run both test suites after integrating subagent output; never accept a part that breaks a suite.
+   - Keep parts focused; no doc changes or refactors outside a part's assigned scope.
 
 ## Style conventions
 - No comments unless asked.
