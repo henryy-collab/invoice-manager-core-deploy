@@ -2,6 +2,12 @@
 
 A record of merged features and notable changes for Invoice Manager Core.
 
+## 2026-09-02 — chore: untrack machine-specific local_config.json
+
+- `local/local_config.json` is now gitignored instead of tracked. It contains machine-specific paths and has never been meaningfully committed (committed copy was stale); keeping it tracked invites accidental resets that destroy the working config (e.g. `git reset --hard`).
+- Copy `local/local_config.example.json` to `local/local_config.json` on each machine to create it. Deployments are unaffected — they configure via the `APP_CONFIG_JSON` env var.
+- Updated `AGENTS.md` / `README.md` to reflect that the file is never committed.
+
 ## 2026-09-02 — fix: rclone push/clear reject filenames starting with `#`
 
 - `SyncService.push_outgoing` and `SyncService.clear_remote_input` now write the per-run file list with `--files-from-raw` instead of `--files-from`.

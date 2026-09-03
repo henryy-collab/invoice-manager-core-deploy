@@ -91,6 +91,6 @@ local/data/
 
 ## Notes
 
-- `local/local_config.json` is machine-specific and may contain local paths; review it before committing shared changes.
+- `local/local_config.json` is machine-specific and gitignored — it never gets committed. Copy `local/local_config.example.json` on each machine and edit that copy.
 - The UI has no authentication; run it only on a trusted network.
 - After UI updates, hard-refresh the browser (`Ctrl+F5`) to clear cached assets.

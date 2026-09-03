@@ -61,7 +61,7 @@ Break large tasks into small, independent parts instead of one big prompt. Each 
 ## Gotchas
 
 - No code comments unless asked.
-- `local/local_config.json` is machine-specific — it is currently tracked in git, so exclude changes to it from feature commits. Relative paths resolve from the project root (the dir containing `.git`).
+- `local/local_config.json` is machine-specific and gitignored — never commit it. Copy `local/local_config.example.json` to create it. Relative paths resolve from the project root (the dir containing `.git`).
 - Runtime data lives in gitignored `local/data/` (incoming, outgoing, archive, logs, reports, state) and is created automatically on startup.
 - Config is driven by a `document_types` registry; `default_document_type` is used when no classifier matches.
 - After UI changes, bump the cache-busting query string (`?v=`) in `ui/static/index.html`; users must hard-refresh (`Ctrl+F5`).
