@@ -2,6 +2,12 @@
 
 A record of merged features and notable changes for Invoice Manager Core.
 
+## 2026-09-03 — fix: Config tab loads from APP_CONFIG_JSON when no config file exists
+
+- `ConfigService.load()` now reads through `load_config_source()` (the same env-aware loader the rest of the app uses) instead of reading `local_config.json` straight from disk.
+- Previously, on deployments that source the config from the `APP_CONFIG_JSON` env var (Zeabur; Coolify after the config was untracked), `GET /api/config` 500'd with `FileNotFoundError` because no config file exists in the image. Local file-based use is unchanged.
+- **Tests**: new `test_config_load_from_env_when_file_missing` covering env-provided config with an absent file.
+
 ## 2026-09-02 — chore: untrack machine-specific local_config.json
 
 - `local/local_config.json` is now gitignored instead of tracked. It contains machine-specific paths and has never been meaningfully committed (committed copy was stale); keeping it tracked invites accidental resets that destroy the working config (e.g. `git reset --hard`).

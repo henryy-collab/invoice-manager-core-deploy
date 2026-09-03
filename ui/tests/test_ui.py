@@ -151,6 +151,40 @@ def test_config_read_write(ui_client):
     assert "document_types" in res.json()["config"]
 
 
+def test_config_load_from_env_when_file_missing(monkeypatch, tmp_path):
+    from invoice_parser.config_loader import APP_CONFIG_ENV
+    from invoice_ui.services.config_service import ConfigService
+
+    env_config = {
+        "source_folder": "data",
+        "input_folder": "data/incoming",
+        "output_folder": "data/outgoing",
+        "archive_folder": "data/archive",
+        "default_document_type": "google_ads",
+        "document_types": {
+            "google_ads": {"classifier": {"patterns": ["Invoice"]}, "fields": {}, "placeholders": {}, "manual_review_for_missing": [], "report_columns": {}},
+            "facebook": {"classifier": {"patterns": ["Invoice #"]}, "fields": {}, "placeholders": {}, "manual_review_for_missing": [], "report_columns": {}},
+        },
+        "rclone": {"enabled": True, "remote": "mydrive-service", "source_drive_folder": "GA", "destination_drive_folder": "GA Out", "destination_subfolder_template": "{year}{month}", "archive_drive_folder": None},
+        "reports": {"enabled": True, "filename_template": "parsed_fields_{timestamp}.csv"},
+        "google_sheets": {"enabled": True, "spreadsheet_url": "https://docs.google.com/spreadsheets/d/ABC/edit", "service_account_file": "keys/file.json", "tab_name_template": "%b %Y", "date_format": "%d/%m/%Y", "skip_existing_by": "number", "raw_sheet_suffix": " [Auto]", "protect_raw_sheets": True},
+        "platforms": {
+            "facebook": {
+                "rclone": {"source_drive_folder": "META", "destination_drive_folder": "META Out"},
+                "google_sheets": {"spreadsheet_url": "https://docs.google.com/spreadsheets/d/DEF/edit"},
+            }
+        },
+    }
+    monkeypatch.setenv(APP_CONFIG_ENV, json.dumps(env_config))
+    missing_path = tmp_path / "local" / "local_config.json"
+    assert not missing_path.exists()
+
+    loaded = ConfigService(missing_path).load()
+    assert loaded["default_document_type"] == "google_ads"
+    assert set(loaded["document_types"]) == {"google_ads", "facebook"}
+    assert loaded["platforms"]["facebook"]["rclone"]["source_drive_folder"] == "META"
+
+
 def test_config_round_trip_preserves_document_types(ui_client, tmp_path):
     res = ui_client.get("/api/config")
     assert res.status_code == 200
